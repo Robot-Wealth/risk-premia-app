@@ -1,0 +1,239 @@
+---
+title: "Risk Premia Strategy Notebook"
+output: html_notebook
+---
+
+Pull data from bigquery
+
+```{r}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, bigrquery, slider)
+
+prices <- query_exec("SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price`;", 
+                     project = 'rw-algotrader', 
+                     use_legacy_sql = FALSE)
+```
+
+TODO: Don't need this when everything works ok... 
+
+```{r}
+indexes <- query_exec("SELECT *  FROM `rw-algotrader.load_assetclass.assetclass_indexes`;", 
+                      project = 'rw-algotrader', 
+                      use_legacy_sql = FALSE)
+```
+
+Dividend adjust these prices... 
+
+TODO - I think adjustedclose on prices now is correct. Validate this.
+
+
+Plot unadjusted...
+
+```{r}
+prices %>% 
+  ggplot(aes(x=date, y = close, color = ticker)) + geom_line()
+```
+
+Calculate cumulative returns
+
+```{r}
+totalreturns <- prices %>%
+  arrange(date) %>%
+  group_by(ticker) %>%
+  mutate(totalreturns = ((close + dividends) / dplyr::lag(close)) - 1) %>%
+  select(-closeadjusted) %>%
+  na.omit() %>%
+  mutate(cumreturns = cumprod(1+totalreturns))
+
+adjratios <- totalreturns %>%
+  group_by(ticker) %>%
+  summarise(date = max(date)) %>%
+  inner_join(totalreturns, by = c('ticker', 'date')) %>%
+  mutate(ratio = close / cumreturns) %>%
+  select(ticker, ratio)
+  
+returns <- totalreturns %>%
+  inner_join(adjratios, by = 'ticker') %>%
+  mutate(adjclose = cumreturns * ratio)
+```
+
+```{r}
+returns %>%
+  ggplot(aes(x=date, y = cumreturns, color = ticker)) + geom_line()
+```
+
+Check that returns calculated from the adjusted prices match total returns
+
+```{r}
+returns %>%
+  mutate(checkreturns = adjclose / lag(adjclose) - 1) %>%
+  mutate(check = totalreturns - checkreturns) %>%
+  na.omit() 
+```
+
+# Scatterplots
+
+
+
+
+# Equal weighted backtest 
+
+Calculate monthly returns
+
+```{r}
+etfprices <- returns %>% 
+  filter(ticker %in% c('VTI','GLD','TLT')) 
+```
+
+```{r}
+library(tidyquant)
+
+# Calculate monthly returns
+monthly_ew <- etfprices %>%
+  tq_transmute(select = adjclose,
+               mutate_fun = periodReturn,
+               period = 'monthly',
+               col_rename = 'return') %>%
+  group_by(date) %>%
+  summarise(portfolio = sum(1/3 * return))
+  
+monthly_ew
+
+monthly_ew %>%
+  ggplot(aes(x=date, y=cumprod(1+portfolio))) +
+  geom_line()
+
+
+monthly_ew %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+monthly_ew %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+```
+
+# Daily equal weight
+
+```{r}
+daily_ew <- etfprices %>%
+  group_by(date) %>%
+  summarise(portfolio = mean(totalreturns))
+
+daily_ew %>%
+  ggplot(aes(x=date, y = cumprod(1 + portfolio))) + geom_line()
+
+daily_ew %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+daily_ew %>% filter(date >= '2010-01-01') %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+```
+
+
+# Vol targeting on the individual assets
+
+Daily rebalance
+
+```{r}
+library(slider)
+vol_target <- 0.05 # size each to 5% annualised vol
+
+volsize <- etfprices %>%
+  mutate(vol20 = slider::slide_dbl(.x = totalreturns, .f = sd, .before = 60, .complete = TRUE) * sqrt(252)) %>%
+  mutate(vol20size = lag(vol_target / vol20)) %>%
+  mutate(vol20returns = vol20size * totalreturns) %>%
+  na.omit()
+
+volsizeportfolio <- volsize %>%
+  group_by(date) %>%
+  summarise(portfolio = sum(vol20returns))
+
+volsizeportfolio %>%
+  ggplot(aes(x=date, y = cumprod(1 + portfolio))) + geom_line()
+
+volsizeportfolio %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+volsizeportfolio %>% filter(date >= '2010-01-01') %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+```
+
+# Monthly rebalance
+
+```{r}
+monthreturns <- etfprices %>%
+  tq_transmute(select = adjclose,
+               mutate_fun = periodReturn,
+               period = 'monthly',
+               col_rename = 'return') %>%
+  inner_join(volsize, by = c('ticker', 'date')) %>%
+  select(ticker, date, vol20size, return)
+
+adjustmentfactors <- monthreturns %>%
+  group_by(date) %>%
+  summarise(totalweight = sum(vol20size)) %>%
+  mutate(adjfactor = case_when(totalweight > 1 ~ 1/totalweight, TRUE ~ 1))
+
+monthstrategyreturns <- monthreturns %>%
+  inner_join(adjustmentfactors, by = c('date')) %>%
+  mutate(constrainedsize = vol20size * adjfactor) %>%
+  mutate(weightedreturn = constrainedsize * return)
+
+month_rebal <- monthstrategyreturns %>%
+  group_by(date) %>%
+  summarise(portfolio = sum(weightedreturn))
+
+month_rebal %>%
+  filter(date >= '2010-01-01') %>%
+  ggplot(aes(x=date, y = cumprod(1 + portfolio))) + geom_line()
+
+month_rebal %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+month_rebal %>% filter(date >= '2010-01-01') %>%
+  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+monthstrategyreturns %>%
+  group_by(date) %>%
+  summarise(totalweight = sum(constrainedsize)) %>%
+  ggplot(aes(x=date, y = totalweight)) + geom_line()
+  
+```
+
+# Get the portfolio returns
+
+```{r}
+library(lubridate)
+dump <- month_rebal %>%
+  filter(date >= '2010-01-01') %>%
+  mutate(date = floor_date(date, 'month')) 
+ # select(date, returns = portfolio) %>%
+ #  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
+
+
+saveRDS(dump, file = 'rp-returns-7vol.RDS')
+```
+
+# Scatterplot of returns 
+
+```{r}
+monthreturns %>%
+  mutate(pastreturns = lag(return)) %>%
+  ggplot(aes(x=pastreturns, y = return)) +
+  geom_point() + 
+  facet_wrap(~ticker) + 
+  ggtitle('Monthly Returns vs Past Month Returns')
+```
+
+# Scatterplot of volatility
+
+```{r}
+monthreturns %>%
+  mutate(vol20  = vol_target / vol20size) %>%
+  mutate(pastvol20 = lag(vol20)) %>%
+  ggplot(aes(x=pastvol20, y = vol20)) +
+  geom_point() + 
+  facet_wrap(~ticker) + 
+  ggtitle('Volatility vs Past Month Volatility')
+
+```
+
