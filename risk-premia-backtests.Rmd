@@ -226,27 +226,38 @@ ew_rebal %>%
 Get vol sizing
 
 ```{r}
-vol_target <- 0.05 # size each to 5% annualised vol
-vol_lookback <- 60
-
 # Calculate vol target sizing on daily data
-volsize_daily <- prices %>%
+theosize_daily <- prices %>%
   group_by(ticker) %>%
   arrange(date) %>%
   mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
-  mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = vol_lookback, .complete = TRUE) * sqrt(252)) %>%
-  mutate(volsize = lag(vol_target / vol))
+  mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = volLookback, .complete = TRUE) * sqrt(252)) %>%
+  mutate(lagvol = lag(vol)) %>%
+  mutate(theosize = assetVolTarget / vol)
 
-monthendsize <- volsize_daily %>%
-  inner_join(monthlyprices, by = 'date') %>%
+# Now enforce a maximum leverage of 1... 
+totalsize <- theosize_daily %>%
   group_by(date) %>%
-  summarise(totalsize = sum(volsize)) %>%
+  summarise(totalsize = sum(theosize)) %>%
   mutate(adjfactor = case_when(totalsize > 1 ~ 1/totalsize, TRUE ~ 1))
 
-volsize <- volsize_daily %>%
-  inner_join(monthendsize, by = 'date') %>%
-  mutate(size = volsize * adjfactor) %>%
-  select(ticker, date, vol, volsize, size)
+theosize_constrained <- theosize_daily %>%
+  inner_join(totalsize, by = 'date') %>%
+  mutate(theosize_constrained = theosize * adjfactor) %>%
+  select(ticker, date, closeadjusted, returns, lagvol, theosize, theosize_constrained) %>%
+  na.omit()
+
+# Get the snapshots at the month end boundaries
+volsizeprices <- monthlyprices %>%
+  inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
+
+# Plot theoretical constrained sizing as a function of time
+volsizeprices %>%
+  ggplot(aes(x=date, y=theosize_constrained, fill=ticker)) +
+    geom_area() + 
+    theme_set(theme_bw()) + 
+    ggtitle('3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
+
 ```
 
 Backtest
