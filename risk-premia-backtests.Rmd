@@ -39,6 +39,9 @@ minCommPerOrder <- 1
 # TODO: Switch to calc commission on close not adjustedclose
 assetVolTarget <- 0.05
 volLookback <- 60
+
+rebalFrequency <- 1 # rebalance frequency in months. Can't be zero otherwise will crap out.
+capFrequency <- 1 # frequence to capitalise profits. 0 = don't. 
 ```
 
 ```{r}
@@ -60,6 +63,8 @@ initDate <- startDate - 1 # InitDate is day before startdate
 
 # Buy initial equal amount - no rebalancing
 
+This is basically assuming that rebalFrequency = capFrequency = 0.
+
 ```{r}
 shares <- monthlyprices %>%
   filter(date == startDate) %>%
@@ -74,7 +79,7 @@ ew_norebal <- monthlyprices %>%
   # Initial trade to setup position comes through as NA
   mutate(trades = case_when(is.na(trades) ~ shares, TRUE ~ trades)) %>%
   mutate(tradevalue = trades * close) %>%
-  mutate(commission = case_when(trades * perShareComm > minCommPerOrder ~ trades * perShareComm, trades == 0 ~ 0, TRUE ~ minCommPerOrder))
+  mutate(commission = case_when(abs(trades) * perShareComm > minCommPerOrder ~ abs(trades) * perShareComm, trades == 0 ~ 0, TRUE ~ minCommPerOrder))
 
 # Calculate cash balance
 initcashbal <- ew_norebal %>% 
@@ -128,9 +133,11 @@ ew_norebal %>%
    
 ```
 
-# Equal weight, rebalanced every month
+# Equal weight, rebalanced regularly
 
 ```{r}
+stopifnot(rebalFrequency > 0)
+
 # Create wide data frames for simple share based backtest
 wideprices <- monthlyprices %>%
   pivot_wider(date, names_from = 'ticker', values_from = 'close')
@@ -141,33 +148,47 @@ cash <- initEq
 sharepos <- c(0,0,0)
 sharevalue <- c(0,0,0)
 equity <- initEq
+capEquity <- initEq # Sticky equity amount that we're using to allow change cap frequency
 
 # Iterate through prices and backtest
 for (i in 1:(nrow(wideprices))) {
    currentdate <- wideprices[i,1] %>% pull() %>% as.Date()
    currentprice <- as.numeric(wideprices[i,2:4])
    equity <- sum(sharepos * currentprice) + cash
-   targetshares <- trunc((equity / 3) / currentprice) 
+   
+   # Update capEquity if it's re-capitalisation rebalance time
+   if(capFrequency > 0) {
+     if(i %% capFrequency == 0) capEquity <- equity 
+   }
+   
+   # Update position sizing if its position rebalance time 
+   if (i == 1 | i %% rebalFrequency == 0) {
+    targetshares <- trunc((capEquity / 3) / currentprice) 
+   }
+   
    trades <- targetshares - sharepos
    tradevalue <- trades * currentprice
+   commissions <- abs(trades) * perShareComm
+   commissions[commissions < minCommPerOrder] <- minCommPerOrder
    
    # Adjust cash by value of trades
-   cash <- cash - sum(tradevalue)
-   # TODO: Trade cost
+   cash <- cash - sum(tradevalue) - sum(commissions)
    sharepos <- targetshares
    sharevalue <- sharepos * currentprice
    equity <- sum(sharevalue) + cash
    
    # Create data frame and add to list
-   row_df <- data.frame(ticker = c('cash', colnames(ew_rebal[2:4])),
+   row_df <- data.frame(ticker = c('cash', colnames(wideprices[2:4])),
                         date = rep(currentdate, 4),
                         close = c(0,currentprice),
                         shares = c(0,sharepos),
                         exposure = c(cash, sharevalue),
                         sharetrades = c(0, trades),
-                        tradevalue = c(-sum(tradevalue), tradevalue))
+                        tradevalue = c(-sum(tradevalue), tradevalue),
+                        commission = c(0, commissions))
    
    rowlist[[i]] <- row_df
+   
 }
 
 # Combine list into dataframe
@@ -181,6 +202,13 @@ ew_rebal %>%
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Equal Weight, Monthly Rebalancing')
 
+# Trading cost as $
+ew_rebal %>%
+  ggplot(aes(x=date, y=commission , fill = ticker)) + 
+    theme_set(theme_bw()) + 
+    geom_bar(stat = 'identity') +
+    ggtitle('3 ETF USD Risk Premia - Commission ($)')
+
 # Trades chart
 ew_rebal %>%
   filter(!ticker == 'cash') %>%
@@ -189,6 +217,8 @@ ew_rebal %>%
     geom_bar(stat = 'identity', position = position_dodge()) + 
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Trades (as % of position size)')
+
+# TODO Determinants of P&L.
 ```
 
 # Volatility Targeted to 5% per leg
