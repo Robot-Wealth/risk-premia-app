@@ -62,13 +62,32 @@ returns %>%
   ggplot(aes(x=date, y = cumreturns, color = ticker)) + geom_line()
 ```
 
+```{r}
+p <- prices %>% 
+  arrange(date) %>%
+  group_by(ticker) %>%
+  mutate(totalreturns = ((closeadjusted) / dplyr::lag(closeadjusted)) - 1) %>%
+  na.omit() %>%
+  mutate(cumreturns = cumprod(1+totalreturns)) %>% 
+  ggplot(aes(x=date, y = cumreturns, color = ticker)) + geom_line()
+  
+returns %>% 
+  filter(ticker == "GLD") %>% 
+  select(ticker, date, totalreturns) %>% 
+  inner_join(p, by = c("ticker", "date")) %>% 
+  mutate(diff = totalreturns.x - totalreturns.y) %>% 
+  ggplot(aes(x = date, y = diff)) + geom_line()
+```
+
+
 Check that returns calculated from the adjusted prices match total returns
 
 ```{r}
 returns %>%
   mutate(checkreturns = adjclose / lag(adjclose) - 1) %>%
   mutate(check = totalreturns - checkreturns) %>%
-  na.omit() 
+  na.omit() %>% 
+  ggplot(aes(x = date, y = check)) + geom_line() + facet_wrap(~ticker)
 ```
 
 # Scatterplots
