@@ -415,7 +415,8 @@ output$ewbhPerfTable <- renderTable({
 })
 
 output$ewbhTradesTable <- renderDataTable({
-  ew_norebal()
+  ew_norebal() %>% 
+    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 })
 
 # EW rebalanced backtest reactives =================
@@ -459,7 +460,8 @@ output$ewrebPerfTable <- renderTable({
 })
 
 output$ewrebTradesTable <- renderDataTable({
-  ew_rebal()
+  ew_rebal() %>% 
+    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 })
 
 
@@ -518,8 +520,9 @@ output$rpPerfTable <- renderTable({
     slice(1)
 })
 
-output$ewrebTradesTable <- renderDataTable({
-  rp_rebal()
+output$rpTradesTable <- renderDataTable({
+  rp_rebal() %>% 
+    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 })
 
 
@@ -531,12 +534,12 @@ output$ewrebTradesTable <- renderDataTable({
 # volsize_prices<- monthlyprices %>%
 #   inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
 # 
-# volsize_prices %>% 
+# volsize_prices %>%
 #   constrained_sizing_plot(title = '3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
 # 
 # rp_rebal <- share_based_backtest(volsize_prices, 10000, 1, 1, 0.5/100., 0.5, rebal_method = "rp")
 # 
-# rp_rebal %>% 
+# rp_rebal %>%
 #   stacked_area_chart('3 ETF USD Risk Premia - Simple Risk Parity')
 
 
