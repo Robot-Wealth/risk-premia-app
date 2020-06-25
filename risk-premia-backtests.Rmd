@@ -133,7 +133,8 @@ ew_norebal %>%
 # Vanity summary performance metrics
 norebal_portfolioreturn <- ew_norebal %>%
   group_by(date) %>%
-  summarise(totalequity = sum(exposure)) %>%
+  summarise(totalequity = sum(exposure),
+            totalcommission = sum(commission)) %>%
   ungroup() %>%
   arrange(date) %>%
   mutate(returns = totalequity / lag(totalequity) - 1) 
@@ -149,6 +150,21 @@ norebal_portfolioreturn %>%
 
 # Table of trades, exposures etc.
 ew_norebal
+
+# Total commssion
+totalcommission <- sum(norebal_portfolioreturn$totalcommission)
+totalcommission
+
+# Turnover
+turnover <- 0
+turnover
+
+# Total dollar profit
+totalprofit <- tail(norebal_portfolioreturn, 1)$totalequity - initEq
+
+# Trading costs as a percentage of total profit 
+costprofit  <- sum(norebal_portfolioreturn$totalcommission) / totalprofit
+costprofit
 
 # TODO Rolling performance, portfolio and assets
    
@@ -252,7 +268,8 @@ ew_rebal %>%
 # Vanity summary performance metrics
 rebal_portfolioreturn <- ew_rebal %>%
   group_by(date) %>%
-  summarise(totalequity = sum(exposure)) %>%
+  summarise(totalequity = sum(exposure),
+            totalcommission = sum(commission)) %>%
   ungroup() %>%
   arrange(date) %>%
   mutate(returns = totalequity / lag(totalequity) - 1) 
@@ -269,7 +286,31 @@ rebal_portfolioreturn %>%
 # Table of trades, exposures etc.
 ew_rebal
 
-# TODO Determinants of P&L.
+# Total commssion
+totalcommission <- sum(rebal_portfolioreturn$totalcommission)
+totalcommission
+
+# AnnualTurnover
+# Calculate as total sell trades divided by mean equity * number of years
+totalselltrades <- ew_rebal %>%
+  filter(ticker != 'cash',
+         tradevalue < 0) %>%
+  summarise(sellvalue = sum(tradevalue)) %>%
+  pull()
+
+meanequity <- mean(rebal_portfolioreturn$totalequity)
+
+turnover <- -totalselltrades / (meanequity * (year(endDate) - year(startDate)))
+turnover
+
+# Total dollar profit
+totalprofit <- tail(rebal_portfolioreturn, 1)$totalequity - initEq
+
+# Trading costs as a percentage of total profit 
+costprofit  <- sum(rebal_portfolioreturn$totalcommission) / totalprofit
+costprofit
+
+# TODO Rolling performance for portfolio and assets
 ```
 
 # Tab 3 - Simple Risk Parity 
@@ -295,8 +336,7 @@ theosize_daily <- prices %>%
   arrange(date) %>%
   mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
   mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = volLookback, .complete = TRUE) * sqrt(252)) %>%
-  mutate(lagvol = lag(vol)) %>%
-  mutate(theosize = assetVolTarget / vol)
+  mutate(theosize = lag(assetVolTarget / vol))
 
 # Now enforce a maximum leverage of 1... 
 totalsize <- theosize_daily %>%
@@ -307,7 +347,7 @@ totalsize <- theosize_daily %>%
 theosize_constrained <- theosize_daily %>%
   inner_join(totalsize, by = 'date') %>%
   mutate(theosize_constrained = theosize * adjfactor) %>%
-  select(ticker, date, closeadjusted, returns, lagvol, theosize, theosize_constrained) %>%
+  select(ticker, date, closeadjusted, returns, vol, theosize, theosize_constrained) %>%
   na.omit()
 
 # Get the snapshots at the month end boundaries
@@ -417,7 +457,8 @@ volsize_rebal %>%
 # Vanity summary performance metrics
 volsize_portfolioreturn <- volsize_rebal %>%
   group_by(date) %>%
-  summarise(totalequity = sum(exposure)) %>%
+  summarise(totalequity = sum(exposure),
+            totalcommission = sum(commission)) %>%
   ungroup() %>%
   arrange(date) %>%
   mutate(returns = totalequity / lag(totalequity) - 1) 
@@ -434,6 +475,31 @@ volsize_portfolioreturn %>%
 # Table of trades, exposures etc.
 volsize_rebal
 
-# TODO Determinants of P&L, rolling performance
+# Total commssion
+totalcommission <- sum(norebal_portfolioreturn$totalcommission)
+totalcommission
+
+# AnnualTurnover
+# Calculate as total sell trades divided by mean equity * number of years
+totalselltrades <- volsize_rebal %>%
+  filter(ticker != 'cash',
+         tradevalue < 0) %>%
+  summarise(sellvalue = sum(tradevalue)) %>%
+  pull()
+
+meanequity <- mean(volsize_portfolioreturn$totalequity)
+
+turnover <- -totalselltrades / (meanequity * (year(endDate) - year(startDate)))
+turnover
+
+# Total dollar profit
+totalprofit <- tail(volsize_portfolioreturn, 1)$totalequity - initEq
+
+# Trading costs as a percentage of total profit 
+costprofit  <- sum(volsize_portfolioreturn$totalcommission) / totalprofit
+costprofit
+
+
+# TODO rolling performance
 ```
 
