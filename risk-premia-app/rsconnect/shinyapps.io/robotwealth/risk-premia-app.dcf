@@ -5,6 +5,6 @@ account: robotwealth
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2497250
-bundleId: 3310562
+bundleId: 3314504
 url: https://robotwealth.shinyapps.io/risk-premia-app/
-when: 1592995761.74714
+when: 1593075281.16894
