@@ -30,19 +30,7 @@ prices %>%
 
 # Backtest setup
 
-Selectable stuff in shiny
-
-```{r}
-initEq <- 10000
-perShareComm <- 0.005
-minCommPerOrder <- 1 
-# TODO: Switch to calc commission on close not adjustedclose
-assetVolTarget <- 0.05
-volLookback <- 60
-
-rebalFrequency <- 1 # rebalance frequency in months. Can't be zero otherwise will crap out.
-capFrequency <- 1 # frequence to capitalise profits. 0 = don't. 
-```
+Calculate monthly prices, and start and end dates...
 
 ```{r}
 monthends <- prices %>% 
@@ -61,7 +49,15 @@ initDate <- startDate - 1 # InitDate is day before startdate
 ```
 
 
-# Buy initial equal amount - no rebalancing
+# Tab 1: Equal Initial Weight Buy and Hold
+
+Here are the inputs that should be on this tab:
+
+```{r}
+initEq <- 10000 # Allow $1000 to 1 million
+perShareComm <- 0.005 # Allow 0.001 to 0.02 
+minCommPerOrder <- 1 # Allow 0 to 5
+```
 
 This is basically assuming that rebalFrequency = capFrequency = 0.
 
@@ -134,12 +130,41 @@ ew_norebal %>%
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Commission as pct of exposure')
 
+# Vanity summary performance metrics
+norebal_portfolioreturn <- ew_norebal %>%
+  group_by(date) %>%
+  summarise(totalequity = sum(exposure)) %>%
+  ungroup() %>%
+  arrange(date) %>%
+  mutate(returns = totalequity / lag(totalequity) - 1) 
 
-# TODO Rolling performance, portfolio and asset-wise.
+# Summary performance
+norebal_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.AnnualizedReturns)
+
+# Drawdowns
+norebal_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.DownsideRisk) %>%
+  select(MaximumDrawdown)
+
+# Table of trades, exposures etc.
+ew_norebal
+
+# TODO Rolling performance, portfolio and assets
    
 ```
 
-# Equal weight, rebalanced regularly
+# Tab 2: Equal Dollar Weight with Rebalancing
+
+Inputs on tab.
+
+```{r}
+initEq <- 10000 # Allow $1000 to 1 million - $100 will be jaws of death...
+perShareComm <- 0.005 # Allow 0.001 to 0.02 
+minCommPerOrder <- 1 # Allow 0 to 5
+rebalFrequency <- 1 # rebalance frequency in months. Allow 1 to 12
+capFrequency <- 1 # frequence to capitalise profits. Allow 0 to 12. 0 is "don't capitalise"
+```
 
 ```{r}
 stopifnot(rebalFrequency > 0)
@@ -224,12 +249,44 @@ ew_rebal %>%
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Trades (as % of position size)')
 
+# Vanity summary performance metrics
+rebal_portfolioreturn <- ew_rebal %>%
+  group_by(date) %>%
+  summarise(totalequity = sum(exposure)) %>%
+  ungroup() %>%
+  arrange(date) %>%
+  mutate(returns = totalequity / lag(totalequity) - 1) 
+
+# Summary performance
+rebal_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.AnnualizedReturns)
+
+# Drawdowns
+rebal_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.DownsideRisk) %>%
+  select(MaximumDrawdown)
+
+# Table of trades, exposures etc.
+ew_rebal
+
 # TODO Determinants of P&L.
 ```
 
-# Volatility Targeted to 5% per leg
+# Tab 3 - Simple Risk Parity 
 
-Get vol sizing
+Inputs for tab
+
+```{r}
+initEq <- 10000 # Allow $1000 to 1 million - $100 will be jaws of death...
+perShareComm <- 0.005 # Allow 0.001 to 0.02 
+minCommPerOrder <- 1 # Allow 0 to 5
+rebalFrequency <- 1 # rebalance frequency in months. Allow 1 to 12
+capFrequency <- 1 # frequence to capitalise profits. Allow 0 to 12. 0 is "don't capitalise"
+assetVolTarget <- 0.05 # Allow 0.01 to 0.1
+volLookback <- 60 # Allow 5 to 250
+```
+
+Calculate vol sizing
 
 ```{r}
 # Calculate vol target sizing on daily data
@@ -357,6 +414,26 @@ volsize_rebal %>%
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Trades (as % of position size)')
 
-# TODO Determinants of P&L.
+# Vanity summary performance metrics
+volsize_portfolioreturn <- volsize_rebal %>%
+  group_by(date) %>%
+  summarise(totalequity = sum(exposure)) %>%
+  ungroup() %>%
+  arrange(date) %>%
+  mutate(returns = totalequity / lag(totalequity) - 1) 
+
+# Summary performance
+volsize_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.AnnualizedReturns)
+
+# Drawdowns
+volsize_portfolioreturn %>%
+  tq_performance(Ra = returns, performance_fun = table.DownsideRisk) %>%
+  select(MaximumDrawdown)
+
+# Table of trades, exposures etc.
+volsize_rebal
+
+# TODO Determinants of P&L, rolling performance
 ```
 
