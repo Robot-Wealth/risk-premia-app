@@ -3,15 +3,20 @@ library(tidyverse)
 library(here)
 library(shinyjs)
 library(shinyWidgets)
+library(DT)
 
 theme_set(theme_bw())
 
 # load data, functions
-load(here::here("risk-premia-app", "data", "assetclass_prices.RData"))  # to run locally
-source(here::here("risk-premia-app", "R", "utils.R")) # to run locally
 
-# source("R/utils.R")  # for deployment
-# load("data/assetclass_prices.RData")  # for deployment
+# to run locally
+load(here::here("risk-premia-app", "data", "assetclass_prices.RData"))  
+source(here::here("risk-premia-app", "R", "utils.R"), local = TRUE) 
+
+# for deployment
+# source("R/utils.R", local = TRUE)
+# load("data/assetclass_prices.RData", local = TRUE)  
+# source("R/backtest_utils.R", local = TRUE) 
 
 # TODO:
     # load from BQ: do we want the unwashed masses hitting our cloud?
@@ -24,8 +29,8 @@ source(here::here("risk-premia-app", "R", "utils.R")) # to run locally
     # rolling corrplot - should use different colours as they don't represent the things above....
     # numbers over tiles on corrplot
     # tooltip for freq to capitalise profits
-    
-
+    # disable irrelevant inputs on backesting tabs
+    # setup backtest params could go into global_utils (same for all sessions....)
 
 
 # calculate total returns
@@ -112,7 +117,26 @@ ui <- navbarPage(
                 ),
             ),
             
-            mainPanel()
+            mainPanel(
+                tabsetPanel(
+                    tabPanel(
+                        "Equal Weight Buy and Hold",
+                        fluidRow(
+                            column(12, align = "center", 
+                                plotOutput("ewbhEqPlot"),
+                                tableOutput("ewbhPerfTable"),
+                                plotOutput("ewbhTradesPlot", height = "150px"),
+                                plotOutput("ewbhCommPlot", height = "150px"),
+                                plotOutput("ewbhCommExpPlot", height = "150px"),
+                                DT::dataTableOutput(("ewbhTradesTable"))
+                            )
+                        )
+                    ),
+                    tabPanel(
+                    "Next Backtest"
+                    )
+                )
+            )
         )
     )
     
@@ -128,6 +152,9 @@ ui <- navbarPage(
 )
 
 server <- function(input, output) {
+    
+    source(here::here("risk-premia-app", "R", "backtest_utils.R"), local = TRUE) 
+    # source("R/backtest_utils.R", local = TRUE) 
     
     # observe({
     #     if(input$"tab" == "perfTab") {
