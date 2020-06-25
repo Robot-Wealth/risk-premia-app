@@ -7,7 +7,7 @@ Pull data from bigquery
 
 ```{r}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, bigrquery, slider, lubridate)
+pacman::p_load(tidyverse, bigrquery, slider, lubridate, tidyquant)
 
 prices <- query_exec("SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');", 
                      project = 'rw-algotrader', 
@@ -91,8 +91,14 @@ initcashbal <- ew_norebal %>%
 
 cash <- ew_norebal %>%
   ungroup() %>%
-  filter(ticker == 'VTI') %>%
-  mutate(ticker = 'Cash', date, close = 0, shares = 0, exposure = initcashbal, trades = 0, tradevalue = case_when(date == startDate ~ initcashbal - initEq, TRUE ~ 0), commission = 0)
+  filter(ticker == 'VTI') %>% # just doing this to get the dates
+  mutate(ticker = 'Cash', 
+         date, 
+         close = 0, 
+         shares = 0, 
+         exposure = initcashbal, 
+         trades = 0, 
+         tradevalue = case_when(date == startDate ~ initcashbal - initEq, TRUE ~ 0), commission = 0)
 
 # Bind cash balances and sort by date again
 ew_norebal <- ew_norebal %>%
@@ -200,7 +206,7 @@ ew_rebal %>%
   ggplot(aes(x=date, y=exposure, fill=ticker)) +
     geom_area() + 
     theme_set(theme_bw()) + 
-    ggtitle('3 ETF USD Risk Premia - Equal Weight, Monthly Rebalancing')
+    ggtitle('3 ETF USD Risk Premia - Equal Weight, Rebalancing')
 
 # Trading cost as $
 ew_rebal %>%
@@ -260,151 +266,97 @@ volsizeprices %>%
 
 ```
 
-Backtest
+Backtest of vol targeting strategy
 
 ```{r}
+stopifnot(rebalFrequency > 0)
+
 # Create wide data frames for simple share based backtest
-wideprices <- monthlyprices %>%
+wideprices <- volsizeprices %>%
   pivot_wider(date, names_from = 'ticker', values_from = 'close')
 
-widevolsize <- volsize %>%
-  pivot_wider(date, names_from = 'ticker', values_from = 'size')
+widetheosize <- volsizeprices %>%
+  pivot_wider(date, names_from = 'ticker', values_from = 'theosize_constrained')
 
 rowlist <- list()
 
 cash <- initEq
 sharepos <- c(0,0,0)
 sharevalue <- c(0,0,0)
+theosizepct <- c(0,0,0)
+targetshares <- c(0,0,0)
 equity <- initEq
+capEquity <- initEq # Sticky equity amount that we're using to allow change cap frequency
 
 # Iterate through prices and backtest
 for (i in 1:(nrow(wideprices))) {
    currentdate <- wideprices[i,1] %>% pull() %>% as.Date()
    currentprice <- as.numeric(wideprices[i,2:4])
+   currenttheosize <- as.numeric(widetheosize[i, 2:4])
    equity <- sum(sharepos * currentprice) + cash
-   targetshares <- trunc((equity / 3) / currentprice) 
+   
+   # Update capEquity if it's re-capitalisation rebalance time
+   if(capFrequency > 0) {
+     if(i %% capFrequency == 0) capEquity <- equity 
+   }
+   
+   # Update position sizing if its position rebalance time 
+   if (i == 1 | i %% rebalFrequency == 0) {
+      targetshares <- trunc((capEquity * currenttheosize) / currentprice)
+   }
+   
    trades <- targetshares - sharepos
    tradevalue <- trades * currentprice
+   commissions <- abs(trades) * perShareComm
+   commissions[commissions < minCommPerOrder] <- minCommPerOrder
    
    # Adjust cash by value of trades
-   cash <- cash - sum(tradevalue)
-   # TODO: Trade cost
+   cash <- cash - sum(tradevalue) - sum(commissions)
    sharepos <- targetshares
    sharevalue <- sharepos * currentprice
    equity <- sum(sharevalue) + cash
    
    # Create data frame and add to list
-   row_df <- data.frame(ticker = c('cash', colnames(ew_rebal[2:4])),
+   row_df <- data.frame(ticker = c('cash', colnames(wideprices[2:4])),
                         date = rep(currentdate, 4),
                         close = c(0,currentprice),
                         shares = c(0,sharepos),
                         exposure = c(cash, sharevalue),
                         sharetrades = c(0, trades),
-                        tradevalue = c(-sum(tradevalue), tradevalue))
+                        tradevalue = c(-sum(tradevalue), tradevalue),
+                        commission = c(0, commissions))
    
    rowlist[[i]] <- row_df
+   
 }
 
 # Combine list into dataframe
-ew_rebal <- bind_rows(rowlist)
+volsize_rebal <- bind_rows(rowlist)
 
 
 # Stacked area chart
-ew_rebal %>% 
+volsize_rebal %>% 
   ggplot(aes(x=date, y=exposure, fill=ticker)) +
     geom_area() + 
     theme_set(theme_bw()) + 
-    ggtitle('3 ETF USD Risk Premia - Equal Weight, Monthly Rebalancing')
+    ggtitle('3 ETF USD Risk Premia - Simple Risk Parity')
+
+# Trading cost as $
+volsize_rebal %>%
+  ggplot(aes(x=date, y=commission , fill = ticker)) + 
+    theme_set(theme_bw()) + 
+    geom_bar(stat = 'identity') +
+    ggtitle('3 ETF USD Risk Premia - Commission ($)')
 
 # Trades chart
-ew_rebal %>%
+volsize_rebal %>%
   filter(!ticker == 'cash') %>%
   mutate(tradepct = tradevalue / exposure) %>%
   ggplot(aes(x=date, y=tradepct, fill=ticker)) +
     geom_bar(stat = 'identity', position = position_dodge()) + 
     theme_set(theme_bw()) + 
     ggtitle('3 ETF USD Risk Premia - Trades (as % of position size)')
-```
 
-
-
-# Monthly rebalance
-
-```{r}
-monthreturns <- etfprices %>%
-  tq_transmute(select = adjclose,
-               mutate_fun = periodReturn,
-               period = 'monthly',
-               col_rename = 'return') %>%
-  inner_join(volsize, by = c('ticker', 'date')) %>%
-  select(ticker, date, vol20size, return)
-
-adjustmentfactors <- monthreturns %>%
-  group_by(date) %>%
-  summarise(totalweight = sum(vol20size)) %>%
-  mutate(adjfactor = case_when(totalweight > 1 ~ 1/totalweight, TRUE ~ 1))
-
-monthstrategyreturns <- monthreturns %>%
-  inner_join(adjustmentfactors, by = c('date')) %>%
-  mutate(constrainedsize = vol20size * adjfactor) %>%
-  mutate(weightedreturn = constrainedsize * return)
-
-month_rebal <- monthstrategyreturns %>%
-  group_by(date) %>%
-  summarise(portfolio = sum(weightedreturn))
-
-month_rebal %>%
-  filter(date >= '2010-01-01') %>%
-  ggplot(aes(x=date, y = cumprod(1 + portfolio))) + geom_line()
-
-month_rebal %>%
-  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
-
-month_rebal %>% filter(date >= '2010-01-01') %>%
-  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
-
-monthstrategyreturns %>%
-  group_by(date) %>%
-  summarise(totalweight = sum(constrainedsize)) %>%
-  ggplot(aes(x=date, y = totalweight)) + geom_line()
-  
-```
-
-# Get the portfolio returns
-
-```{r}
-library(lubridate)
-dump <- month_rebal %>%
-  filter(date >= '2010-01-01') %>%
-  mutate(date = floor_date(date, 'month')) 
- # select(date, returns = portfolio) %>%
- #  tq_performance(Ra = portfolio, performance_fun = table.AnnualizedReturns)
-
-
-saveRDS(dump, file = 'rp-returns-7vol.RDS')
-```
-
-# Scatterplot of returns 
-
-```{r}
-monthreturns %>%
-  mutate(pastreturns = lag(return)) %>%
-  ggplot(aes(x=pastreturns, y = return)) +
-  geom_point() + 
-  facet_wrap(~ticker) + 
-  ggtitle('Monthly Returns vs Past Month Returns')
-```
-
-# Scatterplot of volatility
-
-```{r}
-monthreturns %>%
-  mutate(vol20  = vol_target / vol20size) %>%
-  mutate(pastvol20 = lag(vol20)) %>%
-  ggplot(aes(x=pastvol20, y = vol20)) +
-  geom_point() + 
-  facet_wrap(~ticker) + 
-  ggtitle('Volatility vs Past Month Volatility')
-
+# TODO Determinants of P&L.
 ```
 
