@@ -3,56 +3,25 @@ library(tidyverse)
 library(here)
 library(shinyjs)
 library(shinyWidgets)
-library(DT)
-library(lubridate)
-library(tidyquant)
-library(slider)
 #library(shinycssloaders)
 
-theme_set(theme_bw())
-
-gg_color_hue <- function(n) {
-    hues = seq(15, 375, length = n + 1)
-    hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
-app_cols <- gg_color_hue(5)
-rp_tickers <- c("VTI", "TLT", 'GLD')
-names(app_cols) <- c(rp_tickers, "Cash", "Portfolio")
-app_col_scale <- scale_colour_manual(name = "ticker", values = app_cols)
-app_fill_scale <- scale_fill_manual(name = "ticker", values = app_cols)
-
-# load data, functions
-
-# to run locally
-# load(here::here("risk-premia-app", "data", "assetclass_prices.RData"))  
-# source(here::here("risk-premia-app", "R", "utils.R"), local = TRUE) 
-
-# for deployment
-source("R/utils.R", local = TRUE)
-load("data/assetclass_prices.RData")
-# source("R/backtest_utils.R", local = TRUE) 
+source(here::here("R", "globals.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
+source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
 
 # TODO:
-    # maybe load data from BQ on the first startup of the day so it's always up to date without always hitting BQ
-    # needs application service token
-    # Apply colour scheme such that colours of already selected assets don't change: DONE
-    # rolling correlation: implement with roll not slider: DONE
-    # spinners on plot load
-    # tour
-    # rolling corrplot - should use different colours as they don't represent the things above....
-    # numbers over tiles on corrplot
-    # tooltip for freq to capitalise profits
-    # setup backtest params could go into global_utils (same for all sessions....)
-    # performance tables to three decimal places
-    # disable inputs on backtest tabs: DONE
+# tests
+# refactor UI into separate files - consider function for generating backtest tabs
+# load data from BQ not local cache
+# Maybe load on the first startup of the day so it's always up to date
+# spinners on plot load
+# user help system
+# rolling corrplot on performance tab - should use different colours from plots above
+# correlation values over tiles on corrplot
+# tooltip for freq to capitalise profits - explain what this is
+# performance tables to three decimal places
+# run backtest button rather than updating on slider move
 
-
-
-# calculate total returns
-prices <- prices %>% 
-    filter(ticker %in% rp_tickers) %>% 
-    add_total_returns_col()
+# UI ====================================
 
 ui <- navbarPage(
     shinyjs::useShinyjs(),
@@ -60,6 +29,8 @@ ui <- navbarPage(
     title = "Risk Premia Harvesting",
     id = "tab",
     selected = "perfTab",
+    
+    # performance tab -------------------
     
     tabPanel(
         "Performance",
@@ -78,6 +49,8 @@ ui <- navbarPage(
             )
         )
     ),
+    
+    # scatterplot tab -------------------
             
     tabPanel(
         "Scatterplots",
@@ -98,6 +71,8 @@ ui <- navbarPage(
             )
         )
     ),
+    
+    # backtesting tab -------------------
     
     tabPanel(
         "Backtest",
@@ -134,6 +109,9 @@ ui <- navbarPage(
             mainPanel(
                 tabsetPanel(
                     id = "backtestPanel",
+                    
+                    # EW B&H tab --------
+                    
                     tabPanel(
                         "Equal Weight Buy and Hold",
                         value = "ewbhTab",
@@ -149,6 +127,9 @@ ui <- navbarPage(
                             )
                         )
                     ),
+                    
+                    # EW Rebal tab ------
+                    
                     tabPanel(
                     "Equal Weight Rebalance",
                     value = "ewrebalTab", 
@@ -164,6 +145,9 @@ ui <- navbarPage(
                             )
                         )
                     ),
+                    
+                    # Risk Parity tab ------
+                    
                     tabPanel(
                         "Risk Parity",
                         fluidRow(
@@ -183,80 +167,14 @@ ui <- navbarPage(
             )
         )
     )
-    
-    # initEq <- 10000
-    # perShareComm <- 0.005
-    # minCommPerOrder <- 1 
-    # # TODO: Switch to calc commission on close not adjustedclose
-    # assetVolTarget <- 0.05
-    # volLookback <- 60
-    # 
-    # rebalFrequency <- 1 # rebalance frequency in months. Can't be zero otherwise will crap out.
-    # capFrequency <- 1 # frequence to capitalise profits. 0 = don't. 
 )
 
 server <- function(input, output) {
     
-    # source(here::here("risk-premia-app", "R", "backtest_utils.R"), local = TRUE) 
-    source("R/backtest_utils.R", local = TRUE) 
-    
-    observe({
-        if(input$backtestPanel == "ewbhTab") {
-            shinyjs::disable(id = "volLookbackSlider")
-            shinyjs::disable(id = "targetVolSlider")
-            shinyjs::disable(id = "rebalFreqSlider")
-            shinyjs::disable(id = "capFreqSlider")
-            
-        } else if (input$backtestPanel == "ewrebalTab") {
-            shinyjs::disable(id = "volLookbackSlider")
-            shinyjs::disable(id = "targetVolSlider")
-            shinyjs::enable(id = "rebalFreqSlider")
-            shinyjs::enable(id = "capFreqSlider")
-        } else {
-            shinyjs::enable(id = "rebalFreqSlider")
-            shinyjs::enable(id = "capFreqSlider")
-            shinyjs::enable(id = "volLookbackSlider")
-            shinyjs::enable(id = "targetVolSlider")
-        }
-    })
-    
-    df <- reactive({
-        prices %>% 
-            filter(ticker %in% input$assets)
-    })
+    # scoped to individual sessions
+    source(here::here("R", "analysis_reactives.R"), local = TRUE)  
+    source(here::here("R", "backtest_reactives.R"), local = TRUE) 
 
-    output$cumReturnsPlot <- renderPlot({
-        df() %>% 
-            total_returns_plot()
-    })
-    
-    output$rollingPerfPlot <- renderPlot({
-        df() %>% 
-            rolling_ann_perf() %>% 
-            rolling_ann_perf_plot()
-    })
-    
-    output$rollCorrPlot <- renderPlot({
-        df() %>% 
-            roll_pairwise_corrs() %>% 
-            roll_pairwise_corrs_plot(facet = FALSE)
-    })
-    
-    output$corrMatPlot <- renderPlot({
-        df() %>% 
-            cormat() %>% 
-            cormat_plot()
-    })
-    
-    output$laggedReturnsPlot <- renderPlot({
-        df() %>% 
-            lagged_returns_scatterplot(estimation_wdw = input$estWdwSize, forward_wdw = input$fwdWdwSize, remove_overlapping = input$removeOverlapping)
-    })
-    
-    output$laggedVolPlot <- renderPlot({
-        df() %>% 
-            lagged_vol_scatterplot(estimation_wdw = input$estWdwSize, forward_wdw = input$fwdWdwSize, remove_overlapping = input$removeOverlapping)
-    })
 }
 
 # Run the application 

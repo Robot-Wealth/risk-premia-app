@@ -1,4 +1,7 @@
-# backtest utilities
+# Functions supporting backtesting tabs
+
+library(tidyverse)
+library(lubridate)
 
 # Setup backtest =======================
 
@@ -18,17 +21,6 @@ make_monthly_prices <- function(prices_df, monthends) {
     select(ticker, date, close = closeadjusted)
   
 }
-
-monthends <- get_monthends(prices)
-
-monthlyprices <- make_monthly_prices(prices, monthends) %>% 
-  arrange(date) %>%
-  group_by(ticker) %>%
-  mutate(returns = ((close) / dplyr::lag(close)) - 1)
-
-startDate <- monthlyprices %>% summarise(min(date)) %>% pull()
-endDate <- monthlyprices %>% summarise(max(date)) %>% pull()
-initDate <- startDate - 1 # InitDate is day before startdate
 
 # Buy equal amount, don't rebalance =====
 
@@ -63,6 +55,8 @@ get_init_cash_bal <- function(positions, inital_equity) {
 }
 
 bind_cash_positions <- function(positions, initial_cash_balance, inital_equity) {
+  # bind cash balances to positions df
+  
   ticker_temp <- positions %>% distinct(ticker) %>% first() %>% pull()
   
   Cash <- positions %>%
@@ -84,6 +78,8 @@ bind_cash_positions <- function(positions, initial_cash_balance, inital_equity) 
     bind_rows(Cash) %>%
     arrange(date)
 }
+
+# Charts ================================
 
 stacked_area_chart <- function(positions, title) {
   positions %>% 
@@ -112,6 +108,7 @@ trades_chart <- function(positions, title) {
 
 comm_chart <- function(positions, title) {
   # Trading cost as $
+  
   positions %>%
     filter(ticker != 'Cash') %>% 
     ggplot(aes(x=date, y=commission , fill = ticker)) +
@@ -126,6 +123,7 @@ comm_chart <- function(positions, title) {
 
 comm_pct_exp_chart <- function(positions, title) {
   # Trading cost as % of total exposure in instrument
+  
   positions %>%
     filter(ticker != 'Cash') %>% 
     mutate(commissionpct = commission / exposure) %>%
@@ -143,6 +141,7 @@ comm_pct_exp_chart <- function(positions, title) {
 
 calc_ann_turnover <- function(positions, mean_equity) {
   # Calculate as total sell trades divided by mean equity * number of years
+  
   totalselltrades <- positions %>%
     filter(
       ticker != 'Cash',
@@ -172,6 +171,8 @@ calc_port_returns <- function(positions) {
 }
 
 summary_performance <- function(positions, initial_equity) {
+  # binds metrics from tidyquant with ours
+  
   port_returns <- positions %>%
     calc_port_returns() 
   
@@ -196,7 +197,8 @@ summary_performance <- function(positions, initial_equity) {
 }
 
 combine_port_asset_returns <- function(positions, returns_df) {
-  # df of port and asset returns
+  # create df of port and asset returns
+  
   positions %>%
     calc_port_returns() %>% 
     select(date, returns) %>%
@@ -206,6 +208,8 @@ combine_port_asset_returns <- function(positions, returns_df) {
 }
 
 rolling_ann_port_perf <- function(port_returns_df) {
+  # rolling performance of portfolio and assets (not asset contribution to portfolio)
+  
   port_returns_df %>% 
     group_by(ticker) %>% 
     arrange(date) %>% 
@@ -242,9 +246,12 @@ rolling_ann_port_perf_plot <- function(perf_df) {
       ) 
 }
 
+# Backtest ==============================
+
 # TODO:
 # - refactor
 # - replace for loop with map_df
+
 share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency, rebal_frequency, per_share_Comm, min_comm, rebal_method = "ew") {
   
   stopifnot(rebal_method %in% c("ew", "rp"))
@@ -321,16 +328,11 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
   
 }
 
-# ew <- share_based_backtest(monthlyprices, 10000, 0.0005, 0.5)
-# summary_performance(ew, 10000)
-# 
-# rp <- share_based_backtest(volsizeprices, 10000, 0.0005, 0.5, rebal_method = "rp")
-# summary_performance(rp, 10000)
-
 # Vol targeting functions ===============
 
-# Calculate vol target sizing on daily data
 calc_vol_target <- function(prices_df, vol_lookback, target_vol) {
+  # Calculate vol target sizing on daily data
+  
   prices %>%
     group_by(ticker) %>%
     arrange(date) %>%
@@ -339,8 +341,9 @@ calc_vol_target <- function(prices_df, vol_lookback, target_vol) {
     mutate(theosize = lag(target_vol / vol))
 }
 
-# Enforce leverage constraint
 cap_leverage <- function(vol_targets, max_leverage = 1) {
+  # Enforce leverage constraint
+  
   total_size <- vol_targets %>%
     group_by(date) %>%
     summarise(totalsize = sum(theosize)) %>%
@@ -353,8 +356,9 @@ cap_leverage <- function(vol_targets, max_leverage = 1) {
     na.omit()
 }
 
-# Plot theoretical constrained sizing as a function of time
 constrained_sizing_plot <- function(volsized_prices, title) {
+  # Plot theoretical constrained sizing as a function of time
+  
   volsized_prices %>%
     ggplot(aes(x = date, y = theosize_constrained, fill = ticker)) +
     geom_area() + 
@@ -365,182 +369,3 @@ constrained_sizing_plot <- function(volsized_prices, title) {
       title = title
     )
 }
-
-# EW backtest reactives =================
-
-ew_norebal <- reactive({
-  shares <- num_shares(monthlyprices, input$initEqSlider)
-  
-  pos <- monthlyprices %>% 
-    ew_norebal_positions(shares, input$commKnob/100., as.double(input$minCommKnob))
-  
-  initcashbal <- pos %>%
-    get_init_cash_bal(input$initEqSlider)
-  
-  pos <- pos %>% 
-    bind_cash_positions(initcashbal, input$initEqSlider)
-  
-})
-
-output$ewbhEqPlot <- renderPlot({
-  ew_norebal() %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing')
-})
-
-output$ewbhRollPerfPlot <- renderPlot({
-  ew_norebal() %>% 
-    combine_port_asset_returns(monthlyprices) %>% 
-    rolling_ann_port_perf() %>% 
-    rolling_ann_port_perf_plot()
-})
-
-output$ewbhTradesPlot <- renderPlot({
-  ew_norebal() %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
-})
-
-output$ewbhCommPlot <- renderPlot({
-  ew_norebal() %>% 
-    comm_chart('3 ETF USD Risk Premia -  Commission ($)')
-})
-
-output$ewbhCommExpPlot <- renderPlot({
-  ew_norebal() %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
-})
-
-output$ewbhPerfTable <- renderTable({
-  ew_norebal() %>% 
-    summary_performance(input$initEqSlider)
-})
-
-output$ewbhTradesTable <- renderDataTable({
-  ew_norebal() %>% 
-    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
-})
-
-# EW rebalanced backtest reactives =================
-
-ew_rebal <- reactive({
-  share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
-})
-
-output$ewrebEqPlot <- renderPlot({
-  ew_rebal() %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, Rebalancing')
-})
-
-output$ewrebRollPerfPlot <- renderPlot({
-  ew_rebal() %>% 
-    combine_port_asset_returns(monthlyprices) %>% 
-    rolling_ann_port_perf() %>% 
-    rolling_ann_port_perf_plot()
-})
-
-output$ewrebTradesPlot <- renderPlot({
-  ew_rebal() %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
-})
-
-output$ewrebCommPlot <- renderPlot({
-  ew_rebal() %>% 
-    comm_chart('3 ETF USD Risk Premia -  Commission ($)')
-})
-
-output$ewrebCommExpPlot <- renderPlot({
-  ew_rebal() %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
-})
-
-# TODO: figure out why performance output is repeated in shiny output
-output$ewrebPerfTable <- renderTable({
-  ew_rebal() %>% 
-    summary_performance(input$initEqSlider) %>% 
-    slice(1)
-})
-
-output$ewrebTradesTable <- renderDataTable({
-  ew_rebal() %>% 
-    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
-})
-
-
-# RP backtest reactives =================
-
-volsize_prices <- reactive({
-  theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, input$targetVolSlider/100.) %>% 
-    cap_leverage()
-  
-  # Get the snapshots at the month end boundaries
-  monthlyprices %>%
-    inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
-})
-
-output$rpTheoSizePlot <- renderPlot({
-  volsize_prices() %>% 
-    constrained_sizing_plot(title = '3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
-})
-
-
-rp_rebal <- reactive({
-  share_based_backtest(volsize_prices(), input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
-})
-
-output$rpEqPlot <- renderPlot({
-  rp_rebal() %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Simple Risk Parity')
-})
-
-output$rpRollPerfPlot <- renderPlot({
-  rp_rebal() %>% 
-    combine_port_asset_returns(monthlyprices) %>% 
-    rolling_ann_port_perf() %>% 
-    rolling_ann_port_perf_plot()
-})
-
-output$rpTradesPlot <- renderPlot({
-  rp_rebal() %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
-})
-
-output$rpCommPlot <- renderPlot({
-  rp_rebal() %>% 
-    comm_chart('3 ETF USD Risk Premia - Commission ($)')
-})
-
-output$rpCommExpPlot <- renderPlot({
-  rp_rebal() %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
-})
-
-# TODO: figure out why performance output is repeated in shiny output
-output$rpPerfTable <- renderTable({
-  rp_rebal() %>% 
-    summary_performance(input$initEqSlider) %>% 
-    slice(1)
-})
-
-output$rpTradesTable <- renderDataTable({
-  rp_rebal() %>% 
-    DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
-})
-
-
-# rp <- share_based_backtest(volsizeprices, 10000, 0.0005, 0.5, rebal_method = "rp")
-# summary_performance(rp, 10000)
-# theosize_constrained <- calc_vol_target(prices, 60, 5/100.) %>%
-#   cap_leverage()
-# 
-# volsize_prices<- monthlyprices %>%
-#   inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
-# 
-# volsize_prices %>%
-#   constrained_sizing_plot(title = '3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
-# 
-# rp_rebal <- share_based_backtest(volsize_prices, 10000, 1, 1, 0.5/100., 0.5, rebal_method = "rp")
-# 
-# rp_rebal %>%
-#   stacked_area_chart('3 ETF USD Risk Premia - Simple Risk Parity')
-
-
-

@@ -1,12 +1,8 @@
+# Functions supporting performance and scatterplot tabs
+
 library(tidyverse)
 library(glue)
 library(roll)
-
-recode_av_columns <- function(av_df) {
-  # change columns of df from AV to RW format
-  # symbol --> ticker
-  # adjusted --> closeadjusted
-}
 
 add_total_returns_col <- function(prices_df) {
   prices_df %>% 
@@ -16,7 +12,6 @@ add_total_returns_col <- function(prices_df) {
     na.omit() %>%
     mutate(cumreturns = cumprod(1+totalreturns))
 }
-
 
 unadjusted_prices_plot <- function(prices_df) {
   prices_df %>% 
@@ -36,7 +31,6 @@ total_returns_plot <- function(returns_df) {
         y = "Cumulative Return",
         title = "Cumulative Total Returns"
       )
-  
 }
 
 rolling_ann_perf <- function(returns_df) {
@@ -110,13 +104,11 @@ mean_pw_cors <- function(correlations_df) {
     summarise(mean_pw_corr = mean(rollingcor, na.rm = TRUE))
 } 
 
-
 roll_pairwise_corrs <- function(returns_df) {
   returns_df %>% 
     fjoin_on_date() %>% 
     wrangle_combos() %>% 
     pairwise_corrs(250) 
-  
 } 
   
 roll_pairwise_corrs_plot <- function(roll_corr_df, facet = FALSE) {
@@ -146,7 +138,6 @@ roll_pairwise_corrs_plot <- function(roll_corr_df, facet = FALSE) {
   }
 }
 
-
 cormat <- function(returns_df) {
   returns_df %>% 
     select(date, ticker, totalreturns) %>% 
@@ -168,15 +159,8 @@ cormat_plot <- function(cor_mat) {
       theme(axis.title.x = element_blank(), axis.title.y = element_blank())
 }
     
-# cormat_plot(cormat)
-
 # scatterplots ==========================
-"
-can't predict returns scatterplot - showing returns against lagged (non-overlapping) returns over various horizons
-can predict vol scatterplot - showing vol against lagged (non-overlapping) vol over various horizons
-vol-price-dependency scatterplot - vol vs lagged momentum
 
-"
 lagged_returns_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, remove_overlapping = TRUE) {
   
   if(remove_overlapping) {
@@ -264,101 +248,3 @@ lagged_vol_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, remo
   }
 }
 
-
-# using slider to get rolling windows, use desired window length - 1 to get the current observation plus the previous (wdw-1), then
-# lag by 1 
-# tlt <- prices %>%
-#   group_by(ticker) %>%
-#   filter(ticker == "TLT") %>%
-#   arrange(date)
-# 
-# wdw <- 6
-# fwd_wdw <- 4
-# mean(tlt$totalreturns[1:wdw])
-# 
-# tlt %>%
-#   mutate(r = dplyr::lag(slide_dbl(totalreturns, .f = mean, .before = wdw-1, .complete = TRUE), 1)) %>%
-#   select(r)
-# 
-# # for fwd returns, we need to use wdw-1 again, but no need to lead/lag as we want to include the current return in the fwd calculation.
-# tlt %>%
-#   mutate(r = slide_dbl(totalreturns, .f = mean, .after = fwd_wdw-1, .complete = TRUE)) %>%
-#   select(date, r)
-# 
-# # likewise with roll need to lag by 1 for the estimation window
-# tlt %>%
-#   mutate(r = dplyr::lag(roll_mean(totalreturns, width = wdw), 1)) %>%
-#   select(r)
-# 
-# # but for fwd window lead by wdw-1 to include the current day's return in the calculaton:
-# tlt %>%
-#   mutate(f = roll_mean(totalreturns, width = fwd_wdw))
-# 
-# tlt %>%
-#   mutate(f = dplyr::lead(roll_mean(totalreturns, width = fwd_wdw), fwd_wdw-1))
-
-
-
-# lagged_returns_scatterplot(prices, 30)
-# lagged_vol_scatterplot(prices, 30)
-
-# library(roll)
-# library(slider)
-# library(microbenchmark)
-# 
-# mb <- microbenchmark(
-# 
-# roll <- prices %>% 
-#     group_by(ticker) %>% 
-#     arrange(date) %>% 
-#     mutate(rolling_ann_return = roll_mean(totalreturns, width = 250)),
-#   
-# slider <-  prices %>% 
-#     group_by(ticker) %>% 
-#     arrange(date) %>% 
-#     mutate(rolling_ann_return = slide_dbl(totalreturns, .f = mean, .before = 250))
-#   
-# )
-# 
-# boxplot(mb, log = FALSE)
-
-# stacked performance plots of a single ticker
-# prices %>% 
-#   group_by(ticker) %>% 
-#   arrange(date) %>% 
-#   mutate(
-#     roll_ann_return = roll_mean(totalreturns, width = 250),
-#     roll_ann_sd = roll_sd(totalreturns, width = 250),
-#     roll_sharpe = sqrt(250)*roll_ann_return/roll_ann_sd
-#   ) %>% 
-#   select(ticker, date, roll_ann_return, roll_ann_sd, roll_sharpe) %>% 
-#   pivot_longer(cols = c(-ticker, -date), names_to = "metric", values_to = "value") %>% 
-#   filter(ticker == "VTI") %>% 
-#   ggplot(aes(x = date, y = value)) +
-#     geom_line() +
-#     facet_wrap(~metric, scales = "free_y", ncol = 1)
-
-# stacked performance plots of all tickers
-# prices %>%
-#   group_by(ticker) %>%
-#   arrange(date) %>%
-#   mutate(
-#     roll_ann_return = roll_mean(totalreturns, width = 250),
-#     roll_ann_sd = roll_sd(totalreturns, width = 250),
-#     roll_sharpe = sqrt(250)*roll_ann_return/roll_ann_sd
-#   ) %>%
-#   select(ticker, date, roll_ann_return, roll_ann_sd, roll_sharpe) %>%
-#   pivot_longer(cols = c(-ticker, -date), names_to = "metric", values_to = "value") %>%
-#   ggplot(aes(x = date, y = value, colour = ticker)) +
-#     geom_line() +
-#     facet_wrap(~metric, scales = "free_y", ncol = 1)
-
-#   
-# prices %>% 
-#   group_by(ticker) %>% 
-#   tq_performance(Ra = totalreturns, performance_fun = Return.annualized)
-
-
-
-
- 
