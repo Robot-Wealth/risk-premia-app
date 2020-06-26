@@ -1,4 +1,4 @@
-# Reactives and their dependencies for backtesting tabs
+# Reactives and their dependencies for backtesting tabs - scope for individual sessions
 
 library(here)
 library(tidyverse)

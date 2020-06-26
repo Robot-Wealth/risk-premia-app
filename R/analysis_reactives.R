@@ -1,4 +1,4 @@
-# reactives for performance and scatterplot tabs
+# reactives for performance and scatterplot tabs - these should be scoped for individual sessions
 
 df <- reactive({
   prices %>% 
