@@ -20,6 +20,7 @@ source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, a
 # tooltip for freq to capitalise profits - explain what this is
 # performance tables to three decimal places
 # run backtest button rather than updating on slider move
+# default commission knobs to baseline IB cost structure
 
 # UI ====================================
 
