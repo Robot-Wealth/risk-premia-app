@@ -8,20 +8,6 @@ library(shinyWidgets)
 source(here::here("R", "globals.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
 
-# TODO:
-# tests
-# refactor UI into separate files - consider function for generating backtest tabs
-# load data from BQ not local cache
-# Maybe load on the first startup of the day so it's always up to date
-# spinners on plot load
-# user help system
-# rolling corrplot on performance tab - should use different colours from plots above
-# correlation values over tiles on corrplot
-# tooltip for freq to capitalise profits - explain what this is
-# performance tables to three decimal places
-# run backtest button rather than updating on slider move
-# default commission knobs to baseline IB cost structure
-
 # UI ====================================
 
 ui <- navbarPage(

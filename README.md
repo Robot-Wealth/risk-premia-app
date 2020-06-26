@@ -2,13 +2,10 @@
 
 Simple risk premia harvesting strategy in an interactive shiny application. 
 
-No timing - rather, get long assets that tend to go up in most economic environments. 
+No timing - rather, get long assets that tend to go up in most economic environments. Explore buy and hold, equal weight rebalancing and risk parity approaches. 
+See `./background/` for background research. 
 
-Explore buy and hold, equal weight rebalancing and risk parity approaches. 
-
-See ./background for background research. 
-
-Lanuch shiny application:
+## Lanuch shiny application
 
 ```R
 library(shiny)
