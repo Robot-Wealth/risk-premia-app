@@ -7,11 +7,13 @@ Pull data from bigquery
 
 ```{r}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, bigrquery, slider)
+pacman::p_load(tidyverse, bigrquery, slider, here)
 
-prices <- query_exec("SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price`;", 
-                     project = 'rw-algotrader', 
-                     use_legacy_sql = FALSE)
+# prices <- query_exec("SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price`;", 
+#                      project = 'rw-algotrader', 
+#                      use_legacy_sql = FALSE)
+
+load(here::here("data", "assetclass_prices.RData"))
 ```
 
 TODO: Don't need this when everything works ok... 
