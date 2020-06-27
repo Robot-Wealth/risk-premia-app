@@ -98,46 +98,62 @@ output$ewbhTradesTable <- renderDataTable({
 
 # EW rebalanced backtest reactives =================
 
-ew_rebal <- reactive({
-  share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
+ew_rebal <- reactiveValues(data = NULL)
+
+observeEvent(input$runBacktestButton, {
+  ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
 })
 
 output$ewrebEqPlot <- renderPlot({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, Rebalancing')
 })
 
 output$ewrebRollPerfPlot <- renderPlot({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     combine_port_asset_returns(monthlyprices) %>% 
     rolling_ann_port_perf() %>% 
     rolling_ann_port_perf_plot()
 })
 
 output$ewrebTradesPlot <- renderPlot({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     trades_chart('3 ETF USD Risk Premia - Trades')
 })
 
 output$ewrebCommPlot <- renderPlot({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     comm_chart('3 ETF USD Risk Premia -  Commission ($)')
 })
 
 output$ewrebCommExpPlot <- renderPlot({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
 })
 
 # TODO: figure out why performance output is repeated in shiny output
 output$ewrebPerfTable <- renderTable({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     summary_performance(input$initEqSlider) %>% 
     slice(1)
 })
 
 output$ewrebTradesTable <- renderDataTable({
-  ew_rebal() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     mutate(across(where(is.numeric), as.numeric)) %>%  # alleged fix for datatable instability...
     DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 }, server = FALSE)
@@ -145,61 +161,78 @@ output$ewrebTradesTable <- renderDataTable({
 
 # RP backtest reactives =================
 
-volsize_prices <- reactive({
+volsize_prices <- reactiveValues(data = NULL)
+rp_rebal <- reactiveValues(data = NULL)
+
+observeEvent(input$runBacktestButton, {
   theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, input$targetVolSlider/100.) %>% 
     cap_leverage()
   
   # Get the snapshots at the month end boundaries
-  monthlyprices %>%
+  volsize_prices$data <- monthlyprices %>%
     inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
+  
+  # backtest
+  rp_rebal$data <- share_based_backtest(volsize_prices$data, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
 })
 
 output$rpTheoSizePlot <- renderPlot({
-  volsize_prices() %>% 
+  if(is.null(volsize_prices$data))
+    return()
+  volsize_prices$data %>% 
     constrained_sizing_plot(title = '3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
 })
 
-
-rp_rebal <- reactive({
-  share_based_backtest(volsize_prices(), input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
-})
-
 output$rpEqPlot <- renderPlot({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     stacked_area_chart('3 ETF USD Risk Premia - Simple Risk Parity')
 })
 
 output$rpRollPerfPlot <- renderPlot({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     combine_port_asset_returns(monthlyprices) %>% 
     rolling_ann_port_perf() %>% 
     rolling_ann_port_perf_plot()
 })
 
 output$rpTradesPlot <- renderPlot({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     trades_chart('3 ETF USD Risk Premia - Trades')
 })
 
 output$rpCommPlot <- renderPlot({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     comm_chart('3 ETF USD Risk Premia - Commission ($)')
 })
 
 output$rpCommExpPlot <- renderPlot({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
 })
 
 # TODO: figure out why performance output is repeated in shiny output
 output$rpPerfTable <- renderTable({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     summary_performance(input$initEqSlider) %>% 
     slice(1)
 })
 
 output$rpTradesTable <- renderDataTable({
-  rp_rebal() %>% 
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
     mutate(across(where(is.numeric), as.numeric)) %>%  # alleged fix for datatable instability...
     DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 }, server = FALSE)
