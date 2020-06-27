@@ -91,6 +91,11 @@ ui <- navbarPage(
                         sliderInput("capFreqSlider", "Frequency to Capitalise Profits", min = 0, max = 12, step = 1, value = 1)
                     )
                 ),
+                fluidRow(
+                    column(12, align = "center",
+                        actionButton("runBacktestButton", "UPDATE BACKTEST")
+                    )
+                )
             ),
             
             mainPanel(

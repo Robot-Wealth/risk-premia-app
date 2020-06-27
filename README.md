@@ -7,7 +7,9 @@ See `./background/` for background research.
 
 ## Lanuch shiny application
 
+Open project then run
+
 ```R
 library(shiny)
-runApp("risk-premia-app")
+runApp()
 ```

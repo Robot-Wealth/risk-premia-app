@@ -28,7 +28,9 @@ observe({
 
 # EW backtest reactives =================
 
-ew_norebal <- reactive({
+ew_norebal <- reactiveValues(data = NULL)
+
+observeEvent(input$runBacktestButton, {
   shares <- num_shares(monthlyprices, input$initEqSlider)
   
   pos <- monthlyprices %>% 
@@ -37,45 +39,59 @@ ew_norebal <- reactive({
   initcashbal <- pos %>%
     get_init_cash_bal(input$initEqSlider)
   
-  pos <- pos %>% 
+  ew_norebal$data <- pos %>% 
     bind_cash_positions(initcashbal, input$initEqSlider)
   
 })
 
 output$ewbhEqPlot <- renderPlot({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing')
 })
 
 output$ewbhRollPerfPlot <- renderPlot({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     combine_port_asset_returns(monthlyprices) %>% 
     rolling_ann_port_perf() %>% 
     rolling_ann_port_perf_plot()
 })
 
 output$ewbhTradesPlot <- renderPlot({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     trades_chart('3 ETF USD Risk Premia - Trades')
 })
 
 output$ewbhCommPlot <- renderPlot({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     comm_chart('3 ETF USD Risk Premia -  Commission ($)')
 })
 
 output$ewbhCommExpPlot <- renderPlot({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
 })
 
 output$ewbhPerfTable <- renderTable({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     summary_performance(input$initEqSlider)
 })
 
 output$ewbhTradesTable <- renderDataTable({
-  ew_norebal() %>% 
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
     mutate(across(where(is.numeric), as.numeric)) %>%  # alleged fix for datatable instability...
     DT::datatable(options = list(order = list(list(2, 'desc'), list(1, 'asc'))))
 }, server = FALSE)
