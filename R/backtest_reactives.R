@@ -40,9 +40,7 @@ observeEvent(input$runBacktestButton, {
   
   if(input$backtestPanel == "ewbhTab") {
     # ew no rebal calculations
-    
     shares <- num_shares(monthlyprices, input$initEqSlider)
-    
     pos <- monthlyprices %>% 
       ew_norebal_positions(shares, input$commKnob/100., as.double(input$minCommKnob))
     
@@ -54,8 +52,6 @@ observeEvent(input$runBacktestButton, {
     
   } else if (input$backtestPanel == "ewrebalTab") {
     # ew rebal calcs
-    
-    
     ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
     
   } else {
