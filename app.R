@@ -3,7 +3,7 @@ library(tidyverse)
 library(here)
 library(shinyjs)
 library(shinyWidgets)
-#library(shinycssloaders)
+library(shinycssloaders)
 
 source(here::here("R", "globals.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
@@ -109,9 +109,11 @@ ui <- navbarPage(
                         value = "ewbhTab",
                         fluidRow(
                             column(12, align = "center", 
-                                plotOutput("ewbhEqPlot"),
+                                plotOutput("ewbhEqPlot") %>% 
+                                    withSpinner(),
                                 tableOutput("ewbhPerfTable"),
-                                plotOutput("ewbhRollPerfPlot"),
+                                plotOutput("ewbhRollPerfPlot") %>% 
+                                    withSpinner(),
                                 plotOutput("ewbhTradesPlot", height = "150px"),
                                 plotOutput("ewbhCommPlot", height = "150px"),
                                 plotOutput("ewbhCommExpPlot", height = "150px"),
@@ -127,8 +129,10 @@ ui <- navbarPage(
                     value = "ewrebalTab", 
                         fluidRow(
                             column(12, align = "center", 
-                               plotOutput("ewrebEqPlot"),
-                               tableOutput("ewrebPerfTable"),
+                               plotOutput("ewrebEqPlot")%>% 
+                                   withSpinner(),
+                               tableOutput("ewrebPerfTable")%>% 
+                                   withSpinner(),
                                plotOutput("ewrebRollPerfPlot"),
                                plotOutput("ewrebTradesPlot", height = "150px"),
                                plotOutput("ewrebCommPlot", height = "150px"),
@@ -144,10 +148,13 @@ ui <- navbarPage(
                         "Risk Parity",
                         fluidRow(
                             column(12, align = "center", 
-                               plotOutput("rpEqPlot"),
-                               plotOutput("rpTheoSizePlot", height = "150px"),
+                               plotOutput("rpEqPlot")%>% 
+                                   withSpinner(),
+                               plotOutput("rpTheoSizePlot", height = "150px")%>% 
+                                   withSpinner(),
                                tableOutput("rpPerfTable"),
-                               plotOutput("rpRollPerfPlot"),
+                               plotOutput("rpRollPerfPlot")%>% 
+                                   withSpinner(),
                                plotOutput("rpTradesPlot", height = "150px"),
                                plotOutput("rpCommPlot", height = "150px"),
                                plotOutput("rpCommExpPlot", height = "150px"),

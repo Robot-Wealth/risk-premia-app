@@ -26,29 +26,60 @@ observe({
   }
 })
 
-# EW backtest reactives =================
-
+# put all bt calcs on observe event, select what to run basis tab selected
+# Update on button click
+init_eq <- reactiveValues(data = NULL)
 ew_norebal <- reactiveValues(data = NULL)
+ew_rebal <- reactiveValues(data = NULL) 
+volsize_prices <- reactiveValues(data = NULL)
+rp_rebal <- reactiveValues(data = NULL)
 
 observeEvent(input$runBacktestButton, {
-  shares <- num_shares(monthlyprices, input$initEqSlider)
+  # set init_eq for use in later reactive output (prevents table updating without button click)
+  init_eq$data <- input$initEqSlider
   
-  pos <- monthlyprices %>% 
-    ew_norebal_positions(shares, input$commKnob/100., as.double(input$minCommKnob))
-  
-  initcashbal <- pos %>%
-    get_init_cash_bal(input$initEqSlider)
-  
-  ew_norebal$data <- pos %>% 
-    bind_cash_positions(initcashbal, input$initEqSlider)
-  
+  if(input$backtestPanel == "ewbhTab") {
+    # ew no rebal calculations
+    
+    shares <- num_shares(monthlyprices, input$initEqSlider)
+    
+    pos <- monthlyprices %>% 
+      ew_norebal_positions(shares, input$commKnob/100., as.double(input$minCommKnob))
+    
+    initcashbal <- pos %>%
+      get_init_cash_bal(input$initEqSlider)
+    
+    ew_norebal$data <- pos %>% 
+      bind_cash_positions(initcashbal, input$initEqSlider)
+    
+  } else if (input$backtestPanel == "ewrebalTab") {
+    # ew rebal calcs
+    
+    
+    ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
+    
+  } else {
+    # rp calcs
+    theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, input$targetVolSlider/100.) %>% 
+      cap_leverage()
+    
+    # Get the snapshots at the month end boundaries
+    volsize_prices$data <- monthlyprices %>%
+      inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
+    
+    # backtest
+    rp_rebal$data <- share_based_backtest(volsize_prices$data, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
+  }
 })
 
+# EW backtest reactives =================
+
 output$ewbhEqPlot <- renderPlot({
+  req(input$runBacktestButton)
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing')
+    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing') 
 })
 
 output$ewbhRollPerfPlot <- renderPlot({
@@ -57,35 +88,35 @@ output$ewbhRollPerfPlot <- renderPlot({
   ew_norebal$data %>% 
     combine_port_asset_returns(monthlyprices) %>% 
     rolling_ann_port_perf() %>% 
-    rolling_ann_port_perf_plot()
+    rolling_ann_port_perf_plot() 
 })
 
 output$ewbhTradesPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
+    trades_chart('3 ETF USD Risk Premia - Trades') 
 })
 
 output$ewbhCommPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    comm_chart('3 ETF USD Risk Premia -  Commission ($)')
+    comm_chart('3 ETF USD Risk Premia -  Commission ($)') 
 })
 
 output$ewbhCommExpPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
+    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure') 
 })
 
 output$ewbhPerfTable <- renderTable({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    summary_performance(input$initEqSlider)
+    summary_performance(init_eq$data) 
 })
 
 output$ewbhTradesTable <- renderDataTable({
@@ -98,11 +129,7 @@ output$ewbhTradesTable <- renderDataTable({
 
 # EW rebalanced backtest reactives =================
 
-ew_rebal <- reactiveValues(data = NULL)
 
-observeEvent(input$runBacktestButton, {
-  ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
-})
 
 output$ewrebEqPlot <- renderPlot({
   if(is.null(ew_rebal$data))
@@ -121,9 +148,9 @@ output$ewrebRollPerfPlot <- renderPlot({
 })
 
 output$ewrebTradesPlot <- renderPlot({
-  if(is.null(ew_rebal$data))
-    return()
-  ew_rebal$data %>% 
+  ewif(is.null(ew_rebal$data))
+  return()
+  ew_rebal$data() %>% 
     trades_chart('3 ETF USD Risk Premia - Trades')
 })
 
@@ -146,7 +173,7 @@ output$ewrebPerfTable <- renderTable({
   if(is.null(ew_rebal$data))
     return()
   ew_rebal$data %>% 
-    summary_performance(input$initEqSlider) %>% 
+    summary_performance(init_eq$data) %>% 
     slice(1)
 })
 
@@ -161,20 +188,7 @@ output$ewrebTradesTable <- renderDataTable({
 
 # RP backtest reactives =================
 
-volsize_prices <- reactiveValues(data = NULL)
-rp_rebal <- reactiveValues(data = NULL)
 
-observeEvent(input$runBacktestButton, {
-  theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, input$targetVolSlider/100.) %>% 
-    cap_leverage()
-  
-  # Get the snapshots at the month end boundaries
-  volsize_prices$data <- monthlyprices %>%
-    inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
-  
-  # backtest
-  rp_rebal$data <- share_based_backtest(volsize_prices$data, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
-})
 
 output$rpTheoSizePlot <- renderPlot({
   if(is.null(volsize_prices$data))
@@ -225,7 +239,7 @@ output$rpPerfTable <- renderTable({
   if(is.null(rp_rebal$data))
     return()
   rp_rebal$data %>% 
-    summary_performance(input$initEqSlider) %>% 
+    summary_performance(init_eq$data) %>% 
     slice(1)
 })
 
