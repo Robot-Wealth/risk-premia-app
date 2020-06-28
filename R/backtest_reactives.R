@@ -125,8 +125,6 @@ output$ewbhTradesTable <- renderDataTable({
 
 # EW rebalanced backtest reactives =================
 
-
-
 output$ewrebEqPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
@@ -144,9 +142,9 @@ output$ewrebRollPerfPlot <- renderPlot({
 })
 
 output$ewrebTradesPlot <- renderPlot({
-  ewif(is.null(ew_rebal$data))
-  return()
-  ew_rebal$data() %>% 
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
     trades_chart('3 ETF USD Risk Premia - Trades')
 })
 
