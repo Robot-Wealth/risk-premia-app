@@ -163,15 +163,20 @@ cormat_plot <- function(cor_mat) {
 
 lagged_returns_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, remove_overlapping = TRUE) {
   
+  df <- returns_df %>%
+    group_by(ticker) %>% 
+    arrange(date) %>% 
+    mutate(
+      estimation_return = sqrt(250)*dplyr::lag(roll_mean(totalreturns, width = estimation_wdw), 1),
+      forward_return = sqrt(250)*dplyr::lead(roll_mean(totalreturns, forward_wdw), forward_wdw - 1)
+    )
+  
   if(remove_overlapping) {
-    returns_df %>%
-      group_by(ticker) %>% 
-      arrange(date) %>% 
-      mutate(
-        estimation_return = sqrt(250)*dplyr::lag(roll_mean(totalreturns, width = estimation_wdw), 1),
-        forward_return = sqrt(250)*dplyr::lead(roll_mean(totalreturns, forward_wdw), forward_wdw - 1)
-      ) %>%  
-      filter(row_number() %% min(c(estimation_wdw, forward_wdw)) == 0) %>%
+    df <- df %>%  
+      filter(row_number() %% min(c(estimation_wdw, forward_wdw)) == 0)
+    } 
+  
+  df %>%
       na.omit() %>% 
       ggplot(aes(x = estimation_return, y = forward_return)) +
         geom_point() +
@@ -183,38 +188,23 @@ lagged_returns_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, 
           title = "Returns vs Forward Returns (annualised)",
           subtitle = "Are returns predictive of future returns?"
         )
-  } else {
-    returns_df %>%
-      group_by(ticker) %>% 
-      arrange(date) %>% 
-      mutate(
-        estimation_return = sqrt(250)*dplyr::lag(roll_mean(totalreturns, width = estimation_wdw), 1),
-        forward_return = sqrt(250)*dplyr::lead(roll_mean(totalreturns, forward_wdw), forward_wdw - 1)
-      ) %>%  
-      na.omit() %>% 
-      ggplot(aes(x = estimation_return, y = forward_return)) +
-      geom_point() +
-      geom_smooth(method=lm) +
-      facet_wrap(~ticker, scales = 'free', ncol = 1) +
-    labs(
-      x = "Estimation Window Mean Return",
-      y = "Forward Window Mean Return",
-      title = "Returns vs Forward Returns (annualised)",
-      subtitle = "Are returns predictive of future returns?"
-    )
-  }
 }
 
 lagged_vol_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, remove_overlapping = TRUE) {
+  df <- returns_df %>%
+    group_by(ticker) %>% 
+    arrange(date) %>% 
+    mutate(
+      estimation_vol = sqrt(250)*dplyr::lag(roll_sd(totalreturns, width = estimation_wdw), 1),
+      forward_vol = sqrt(250)*dplyr::lead(roll_sd(totalreturns, forward_wdw), forward_wdw - 1)
+    )
+  
   if(remove_overlapping) {
-    returns_df %>%
-      group_by(ticker) %>% 
-      arrange(date) %>% 
-      mutate(
-        estimation_vol = sqrt(250)*dplyr::lag(roll_sd(totalreturns, width = estimation_wdw), 1),
-        forward_vol = sqrt(250)*dplyr::lead(roll_sd(totalreturns, forward_wdw), forward_wdw - 1)
-      ) %>%  
-      filter(row_number() %% min(c(estimation_wdw, forward_wdw)) == 0) %>%
+     df <- df %>%  
+      filter(row_number() %% min(c(estimation_wdw, forward_wdw)) == 0) 
+    } 
+  
+  df %>%
       na.omit() %>% 
       ggplot(aes(x = estimation_vol, y = forward_vol)) +
         geom_point() +
@@ -226,25 +216,5 @@ lagged_vol_scatterplot <- function(returns_df, estimation_wdw, forward_wdw, remo
         title = "Volatility vs Forward Volatility (annualised)",
         subtitle = "Is volatility predictive of future volatility?"
       )
-  } else {
-    returns_df %>%
-      group_by(ticker) %>% 
-      arrange(date) %>% 
-      mutate(
-        estimation_vol = sqrt(250)*dplyr::lag(roll_sd(totalreturns, width = estimation_wdw), 1),
-        forward_vol = sqrt(250)*dplyr::lead(roll_sd(totalreturns, forward_wdw), forward_wdw - 1)
-      ) %>%  
-      na.omit() %>% 
-      ggplot(aes(x = estimation_vol, y = forward_vol)) +
-        geom_point() +
-        geom_smooth(method=lm) +
-        facet_wrap(~ticker, scales = 'free', ncol = 1) +
-      labs(
-        x = "Estimation Window Volatility",
-        y = "Forward Window Volatility",
-        title = "Volatility vs Forward Volatility (annualised)",
-        subtitle = "Is volatility predictive of future volatility?"
-      )
-  }
 }
 
