@@ -333,7 +333,7 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
 calc_vol_target <- function(prices_df, vol_lookback, target_vol) {
   # Calculate vol target sizing on daily data
   
-  prices %>%
+  prices_df %>%
     group_by(ticker) %>%
     arrange(date) %>%
     mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
