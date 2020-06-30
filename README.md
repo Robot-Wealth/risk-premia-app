@@ -11,5 +11,6 @@ Open project then run
 
 ```R
 library(shiny)
+options(shiny.autoload.r = FALSE)
 runApp()
 ```
