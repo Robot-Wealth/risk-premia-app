@@ -70,7 +70,9 @@ p <- prices %>%
   group_by(ticker) %>%
   mutate(totalreturns = ((closeadjusted) / dplyr::lag(closeadjusted)) - 1) %>%
   na.omit() %>%
-  mutate(cumreturns = cumprod(1+totalreturns)) %>% 
+  mutate(cumreturns = cumprod(1+totalreturns)) 
+
+p %>% 
   ggplot(aes(x=date, y = cumreturns, color = ticker)) + geom_line()
   
 returns %>% 
