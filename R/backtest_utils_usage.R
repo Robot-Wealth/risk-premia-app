@@ -2,7 +2,7 @@
 
 library(here)
 
-load(here::here("data", "assetclass_prices.RData"))
+load(here::here("data", "assetclass_prices_copy.RData"))
 source(here::here("R", "analysis_utils.R"))
 source(here::here("R", "backtest_utils.R"))  
 

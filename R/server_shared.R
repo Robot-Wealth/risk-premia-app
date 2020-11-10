@@ -8,7 +8,7 @@ library(tidyquant)
 library(slider)
 
 # load data, functions
-load(here::here("data", "assetclass_prices.RData"))
+load(here::here("data", "assetclass_prices_copy.RData"))
 source(here::here("R", "analysis_utils.R"), local = TRUE)
 source(here::here("R", "backtest_utils.R"), local = TRUE)
 
