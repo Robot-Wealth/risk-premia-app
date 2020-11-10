@@ -3,6 +3,8 @@ library(bigrquery)
 library(lubridate)
 library(timeDate)
 library(glue)
+library(here)
+
 "
 BQ pricing for queries:
 - first 5TB/month free
@@ -42,6 +44,9 @@ is_after_ny_close <- function(x) {
 # update price data with latest from bq
 # won't deal with data gaps
 bq_fetch_rp_prices <- function(last_price_date) {
+  
+  # authorise big query
+  bq_auth(path = "rw-algotrader-d96fb339cc47.json")
   
   # download anything we don't have
   tb <- bq_project_query(

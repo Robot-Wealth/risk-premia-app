@@ -4,12 +4,19 @@ library(here)
 library(shinyjs)
 library(shinyWidgets)
 library(shinycssloaders)
+# library(here)
+# library(tidyverse)
+library(glue)
+library(roll)
+
+# prevent automatic sourcing of R directory
+shinyOptions(shiny.autoload.r = FALSE)
 
 # update price data on startup of new process - if app is not running locally
-if(Sys.getenv("SHINY_PORT") != "") {
-    source(here::here("R", "update_data.R"), local = TRUE) # visible to server, all sessions
-    update_price_data()
-}
+# if(Sys.getenv("SHINY_PORT") != "") {
+source(here::here("R", "update_data.R"), local = TRUE) # visible to server, all sessions
+update_price_data()
+# }
 
 source(here::here("R", "global.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
@@ -183,8 +190,13 @@ ui <- navbarPage(
 server <- function(input, output) {
     
     # scoped to individual sessions
-    source(here::here("R", "analysis_reactives.R"), local = TRUE)  
-    source(here::here("R", "backtest_reactives.R"), local = TRUE) 
+    
+    ## Analysis reactives -------
+    source(here::here("R", "analysis_reactives.R"), local = TRUE)
+    
+    ## Backtest reactives --------
+    source(here::here("R", "backtest_reactives.R"), local = TRUE)
+    
 
 }
 
