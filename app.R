@@ -35,10 +35,14 @@ ui <- navbarPage(
             ),
         
             mainPanel(
-                plotOutput("cumReturnsPlot"),
-                plotOutput("rollingPerfPlot"),
-                plotOutput("rollCorrPlot"),
-                plotOutput("corrMatPlot")
+                plotOutput("cumReturnsPlot") %>% 
+                    withSpinner(),
+                plotOutput("rollingPerfPlot") %>% 
+                    withSpinner(),
+                plotOutput("rollCorrPlot") %>% 
+                    withSpinner(),
+                plotOutput("corrMatPlot")%>% 
+                    withSpinner()
             )
         )
     ),
@@ -58,8 +62,8 @@ ui <- navbarPage(
         ),
             mainPanel(
                 fluidRow(
-                    column(6, plotOutput("laggedReturnsPlot")),
-                    column(6, plotOutput("laggedVolPlot"))
+                    column(6, plotOutput("laggedReturnsPlot") %>% withSpinner()),
+                    column(6, plotOutput("laggedVolPlot") %>% withSpinner())
                 )
             )
         )
@@ -173,6 +177,8 @@ ui <- navbarPage(
         )
     )
 )
+
+# Server ================================
 
 server <- function(input, output) {
     

@@ -117,7 +117,7 @@ update_price_data <- function() {
       distinct(ticker, date, .keep_all = TRUE) %>% 
       arrange(date)
     
-    save(prices, file = here::here("data", "assetclass_prices_copy.RData"))   
+    save(prices, file = here::here("data", "assetclass_prices.RData"))   
   }
   
 }
