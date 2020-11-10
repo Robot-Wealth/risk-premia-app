@@ -7,11 +7,23 @@ Pull data from bigquery
 
 ```{r}
 if (!require("pacman")) install.packages("pacman")
+
 pacman::p_load(tidyverse, bigrquery, slider, lubridate, tidyquant, here)
 
-# prices <- query_exec("SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');", 
-#                      project = 'rw-algotrader', 
-#                      use_legacy_sql = FALSE)
+prices <- query_exec(
+  "SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');",
+  project = 'rw-algotrader',
+  use_legacy_sql = FALSE
+)
+
+tb <- bq_project_query(
+  'rw-algotrader',
+  "SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');"
+)
+bq_table_fields(tb)
+p <- bq_table_download(tb)
+
+
 load(here::here("data", "assetclass_prices.RData"))
 
 prices <- prices %>% arrange(date) %>% as_tibble()

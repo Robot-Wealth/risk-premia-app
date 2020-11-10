@@ -1,5 +1,7 @@
 # reactives for performance and scatterplot tabs - these should be scoped for individual sessions
 
+library(shiny)
+
 df <- reactive({
   prices %>% 
     filter(ticker %in% input$assets)
