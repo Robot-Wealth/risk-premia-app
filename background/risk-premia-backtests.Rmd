@@ -3,6 +3,25 @@ title: "Risk Premia Strategy Notebook"
 output: html_notebook
 ---
 
+# Purpose
+
+Write file of 3-asset RP strategy returns, scaled to annualised volatility of 10%. (Rebalanced back to target vol every volLookback days)
+
+Set the end date below. Other parameters are:
+- initEq <- 10000 .
+- perShareComm <- 0.005 
+- minCommPerOrder <- 1 
+- rebalFrequency <- 1 # rebalance frequency in months. 
+- capFrequency <- 1 # frequence to capitalise profits. 0 is "don't capitalise"
+- assetVolTarget <- 0.05 
+- volLookback <- 60 
+
+```{r}
+backtest_end_date <- "2020-11-04"
+```
+
+
+
 Pull data from bigquery
 
 ```{r}
@@ -10,21 +29,22 @@ if (!require("pacman")) install.packages("pacman")
 
 pacman::p_load(tidyverse, bigrquery, slider, lubridate, tidyquant, here)
 
-prices <- query_exec(
-  "SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');",
-  project = 'rw-algotrader',
-  use_legacy_sql = FALSE
-)
+# legacy 
+# prices <- query_exec(
+#   "SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');",
+#   project = 'rw-algotrader',
+#   use_legacy_sql = FALSE
+# )
 
 tb <- bq_project_query(
   'rw-algotrader',
   "SELECT *  FROM `rw-algotrader.master_assetclass.assetclass_price` WHERE ticker in ('VTI','GLD','TLT');"
 )
 bq_table_fields(tb)
-p <- bq_table_download(tb)
+prices <- bq_table_download(tb)
 
 
-load(here::here("data", "assetclass_prices.RData"))
+# load(here::here("data", "assetclass_prices.RData"))
 
 prices <- prices %>% arrange(date) %>% as_tibble()
 ```
@@ -57,7 +77,7 @@ monthlyprices <- prices %>%
   select(ticker, date, close = closeadjusted)
 
 startDate <- monthlyprices %>% summarise(min(date)) %>% pull()
-endDate <- monthlyprices %>% summarise(max(date)) %>% pull()
+endDate <-backtest_end_date  # monthlyprices %>% summarise(max(date)) %>% pull()
 initDate <- startDate - 1 # InitDate is day before startdate
 ```
 
@@ -337,7 +357,7 @@ minCommPerOrder <- 1 # Allow 0 to 5
 rebalFrequency <- 1 # rebalance frequency in months. Allow 1 to 12
 capFrequency <- 1 # frequence to capitalise profits. Allow 0 to 12. 0 is "don't capitalise"
 assetVolTarget <- 0.05 # Allow 0.01 to 0.1
-volLookback <- 60 # Allow 5 to 250
+volLookback <- 30 # Allow 5 to 250
 ```
 
 Calculate vol sizing
@@ -514,5 +534,47 @@ costprofit
 
 
 # TODO rolling performance
+```
+## Scale to 10% vol based on recent realised vol
+
+```{r}
+# backtested portfolio returns
+port <- volsize_rebal %>% 
+  group_by(date) %>% 
+  summarise(nav = sum(exposure)) %>% 
+  mutate(returns = (nav - lag(nav, 1))/lag(nav, 1))
+
+# scale to vtarget based on realised recent vol
+# port_vol_lookback <- 4  # MONTHS!!!
+# vtarget <- 0.1
+# port <- port %>% 
+#   mutate(scaled_returns = vtarget / (runSD(returns, n = port_vol_lookback) * sqrt(12)) * returns)
+
+# scale up based on actual vol - this is a bit of a cheat but ok for demo
+realised_vol <- port %>% 
+  summarise(realised_vol = sd(returns, na.rm = TRUE)*sqrt(12)) %>% 
+  pull()
+
+port <- port %>% 
+  mutate(scaled_returns = returns * 0.1/realised_vol)
+
+
+port %>% 
+  summarise(realised_vol = sd(scaled_returns, na.rm = TRUE)*sqrt(12))
+
+port %>% 
+  ggplot(aes(x = date, y = runSD(scaled_returns, n = port_vol_lookback) * sqrt(12))) +
+    geom_line() +
+    geom_hline(yintercept = vtarget)
+
+```
+
+
+## Write returns to disk
+
+```{r}
+port %>% 
+  select(date, scaled_returns) %>% 
+  saveRDS(file = here::here("portfolio", "data", "rp_returns_volten.RDS"))
 ```
 

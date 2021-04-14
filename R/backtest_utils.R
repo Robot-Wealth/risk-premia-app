@@ -154,7 +154,7 @@ calc_ann_turnover <- function(positions, mean_equity) {
   if(length(totalselltrades) == 0) {
     return(0)
   } else {
-    -totalselltrades / (mean_equity * (year(endDate) - year(startDate)))
+    -100*totalselltrades / (mean_equity * (year(endDate) - year(startDate)))
   }
 }
 
@@ -178,21 +178,32 @@ summary_performance <- function(positions, initial_equity) {
   
   mean_equity <- mean(port_returns$totalequity)
   total_profit <- tail(port_returns, 1)$totalequity - initial_equity
-  costs_pct_profit <- sum(port_returns$totalcommission) / total_profit
+  costs_pct_profit <- 100*sum(port_returns$totalcommission) / total_profit
   
   port_returns %>% 
     tq_performance(Ra = returns, performance_fun = table.AnnualizedReturns) %>% 
+    mutate(
+      AnnualizedReturn = 100*AnnualizedReturn,
+      AnnualizedStdDev = 100*AnnualizedStdDev
+    ) %>% 
+    rename(
+      "Ann.Return(%)" = AnnualizedReturn,
+      "Ann.Sharpe(Rf=0%)" = `AnnualizedSharpe(Rf=0%)`,
+      "Ann.Volatility(%)" = AnnualizedStdDev
+    ) %>% 
     bind_cols(c(
       port_returns %>%
         tq_performance(Ra = returns, performance_fun = table.DownsideRisk) %>%
-        select(MaximumDrawdown),
+        mutate(MaximumDrawdown = 100*MaximumDrawdown) %>% 
+        select(MaximumDrawdown) %>% 
+        rename("Max.DD(%)" = MaximumDrawdown),
       positions %>% 
         calc_ann_turnover(mean_equity) %>% 
-        enframe(name = NULL, value = "Ave.Ann.Turnover"),
+        enframe(name = NULL, value = "Ave.Ann.Turnover(%)"),
       total_profit %>% 
-        enframe(name = NULL, value = "Tot.Profit"),
+        enframe(name = NULL, value = "Tot.Profit($)"),
       costs_pct_profit %>% 
-        enframe(name = NULL, value = "Costs(pct.Profit)")
+        enframe(name = NULL, value = "Costs(%Profit)")
     ))
 }
 
