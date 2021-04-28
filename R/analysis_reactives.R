@@ -39,3 +39,10 @@ output$laggedVolPlot <- renderPlot({
   df() %>% 
     lagged_vol_scatterplot(estimation_wdw = input$estWdwSize, forward_wdw = input$fwdWdwSize, remove_overlapping = input$removeOverlapping)
 })
+
+
+output$volTargetPlot <- renderPlot({
+  df() %>%
+    vol_target_plot(estimation_wdw = input$estWdwSize, rebal_threshold =input$rebalThreshold , vol_target = input$volTarget/100 )
+    
+})

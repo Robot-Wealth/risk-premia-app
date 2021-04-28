@@ -229,20 +229,25 @@ vol_target_plot <- function(returns_df,estimation_wdw,rebal_threshold,vol_target
     mutate(
       estimation_vol = sqrt(250)* roll_sd(totalreturns, width = estimation_wdw),
       size = vol_target / lag(estimation_vol),
-      vol_diff = abs((estimation_vol - vol_target)/vol_target) * 100,
-      row_num = 1:n()) %>%  #Convert fraction difference to Percent % 
+      vol_diff = abs((estimation_vol - vol_target)/vol_target) * 100,  #Convert fraction difference to Percent % 
+      row_num = 1:n()) %>%
     na.omit() %>%
     arrange(ticker,date) %>%
     #Rebal Threshold Part
     mutate(thresh_size = case_when(row_num == 1 ~ size, vol_diff < rebal_threshold ~ NA_real_, TRUE ~ size)) %>%
     fill(thresh_size, .direction="down") %>%
-    mutate(volsizereturns = totalreturns * thresh_size) %>%
-    pivot_longer(c(totalreturns,volsizereturns), names_to = "strategy", values_to = "return" ) %>%
+    mutate(volsizereturns = totalreturns * size,
+           volSizeReturnsThreshold = totalreturns * thresh_size
+    ) %>%
+    pivot_longer(c(totalreturns,volsizereturns,volSizeReturnsThreshold), names_to = "strategy", values_to = "return" ) %>%
     select(date, ticker, strategy, return, estimation_vol) %>%
+    group_by(ticker,strategy) %>%
+    arrange(date) %>%
+    
     mutate(vol = sqrt(250)* roll_sd(return, width = estimation_wdw)) %>%
+    ungroup() %>%
     
     #Plotting
-    
     ggplot(aes(x=date,y=vol)) + 
     geom_line(aes(color=strategy)) + 
     geom_hline(aes(yintercept=vol_target),colour="black",size=1.0,alpha=0.5) +

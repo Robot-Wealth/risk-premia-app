@@ -64,13 +64,16 @@ ui <- navbarPage(
                 selectizeInput("assets", "Select Assets", choices = c("VTI", "TLT", "GLD"), selected = c("VTI", "TLT", "GLD"), multiple = TRUE),
                 sliderInput("estWdwSize", "Select Estimation Window Length", min = 10, max = 100, step = 10, value = 30),
                 sliderInput("fwdWdwSize", "Select Forward Window Length", min = 10, max = 100, step = 10, value = 30),
+                sliderInput("volTarget", "Select Volatility Target", min = 10, max = 100, step = 5, value = 15),
+                sliderInput("rebalThreshold", "Select Rebalancing Threshold", min = 10, max = 100, step = 10, value = 15),
                 checkboxInput("removeOverlapping", label = "Show Non-Overlapping Periods Only", value = TRUE)
         
         ),
             mainPanel(
                 fluidRow(
                     column(6, plotOutput("laggedReturnsPlot") %>% withSpinner()),
-                    column(6, plotOutput("laggedVolPlot") %>% withSpinner())
+                    column(6, plotOutput("laggedVolPlot") %>% withSpinner()),
+                    column(12, plotOutput("volTargetPlot") %>% withSpinner())
                 )
             )
         )
