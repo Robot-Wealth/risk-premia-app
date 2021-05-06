@@ -14,7 +14,7 @@ observe({
     shinyjs::disable(id = "targetVolSlider3")
     shinyjs::disable(id = "rebalFreqSlider")
     shinyjs::disable(id = "capFreqSlider")
-    
+    shinyjs::disable(id = "sameVolCheckbox")
   } else if (input$backtestPanel == "ewrebalTab") {
     shinyjs::disable(id = "volLookbackSlider")
     shinyjs::disable(id = "targetVolSlider1")
@@ -22,6 +22,7 @@ observe({
     shinyjs::disable(id = "targetVolSlider3")
     shinyjs::enable(id = "rebalFreqSlider")
     shinyjs::enable(id = "capFreqSlider")
+    shinyjs::disable(id = "sameVolCheckbox")
   } else {
     shinyjs::enable(id = "rebalFreqSlider")
     shinyjs::enable(id = "capFreqSlider")
@@ -29,6 +30,7 @@ observe({
     shinyjs::enable(id = "targetVolSlider1")
     shinyjs::enable(id = "targetVolSlider2")
     shinyjs::enable(id = "targetVolSlider3")
+    shinyjs::enable(id = "sameVolCheckbox")
   }
 })
 

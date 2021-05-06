@@ -41,8 +41,8 @@ rolling_ann_perf <- function(returns_df) {
     group_by(ticker) %>% 
     arrange(date) %>% 
     mutate(
-      roll_ann_return = sqrt(250)*roll_mean(totalreturns, width = 250),
-      roll_ann_sd = sqrt(250)*roll_sd(totalreturns, width = 250),
+      roll_ann_return = 250*roll_mean(totalreturns, width = 250, min_obs = 250),
+      roll_ann_sd = sqrt(250)*roll_sd(totalreturns, width = 250, min_obs = 250),
       roll_sharpe = roll_ann_return/roll_ann_sd
     ) %>% 
     select(date, ticker, roll_ann_return, roll_ann_sd, roll_sharpe) %>% 
@@ -63,7 +63,7 @@ rolling_ann_perf_plot <- function(perf_df) {
     labs(
       x = "Date",
       y = "Value",
-      title = "Rolling Annualised Performance Statistics"
+      title = "1-year Rolling Annualised Performance Statistics"
     )
 }
 
