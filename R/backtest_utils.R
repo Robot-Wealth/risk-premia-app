@@ -343,13 +343,32 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
 
 calc_vol_target <- function(prices_df, vol_lookback, target_vol) {
   # Calculate vol target sizing on daily data
+  stopifnot("target_vol must be either length 1 or same length as unique(tickers)" = length(target_vol) %in% c(1, length(rp_tickers)))
   
-  prices_df %>%
-    group_by(ticker) %>%
-    arrange(date) %>%
-    mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
-    mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = vol_lookback, .complete = TRUE) * sqrt(252)) %>%
-    mutate(theosize = lag(target_vol / vol))
+  if(length(target_vol) == 1) {
+    # same vol target for each asset
+    prices_df %>%
+      group_by(ticker) %>%
+      arrange(date) %>%
+      mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
+      mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = vol_lookback, .complete = TRUE) * sqrt(252)) %>%
+      mutate(theosize = lag(target_vol / vol))  
+  } else {
+    # separate vol targets for each asset
+    prices_df %>%
+      group_by(ticker) %>%
+      arrange(date) %>%
+      mutate(returns = (closeadjusted / dplyr::lag(closeadjusted)) - 1) %>%
+      mutate(vol = slider::slide_dbl(.x = returns, .f = sd, .before = vol_lookback, .complete = TRUE) * sqrt(252)) %>%
+      mutate(theosize = case_when(
+        ticker == rp_tickers[1] ~ lag(target_vol[rp_tickers[1]] / vol),
+        ticker == rp_tickers[2] ~ lag(target_vol[rp_tickers[2]] / vol),
+        ticker == rp_tickers[3] ~ lag(target_vol[rp_tickers[3]] / vol),
+        TRUE ~ as.numeric(NA)
+        )
+      )
+  }
+  
 }
 
 cap_leverage <- function(vol_targets, max_leverage = 1) {

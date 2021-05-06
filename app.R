@@ -94,24 +94,30 @@ ui <- navbarPage(
                     )
                 ),
                 fluidRow(
-                    column(6, 
-                        sliderInput("targetVolSlider", "Target Asset Volatility, %", min = 1, max = 10, step = 0.5, value = 5)
+                    column(
+                        6, 
+                        sliderInput("targetVolSlider1", glue("{rp_tickers[1]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
+                        sliderInput("targetVolSlider2", glue("{rp_tickers[2]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
+                        sliderInput("targetVolSlider3", glue("{rp_tickers[3]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5)
                     ),
                     column(6, 
-                        sliderInput("volLookbackSlider", "Volatility Estimation Window, days", min = 5, max = 120, step = 5, value = 60)
-                    )
-                ),
-                fluidRow(
-                    column(6, 
-                        sliderInput("rebalFreqSlider", "Rebalance Frequency, months", min = 1, max = 12, step = 1, value = 1)
-                    ),
-                    column(6, 
+                        sliderInput("volLookbackSlider", "Volatility Estimation Window, days", min = 5, max = 120, step = 5, value = 60),
+                        sliderInput("rebalFreqSlider", "Rebalance Frequency, months", min = 1, max = 12, step = 1, value = 1),
                         sliderInput("capFreqSlider", "Frequency to Capitalise Profits", min = 0, max = 12, step = 1, value = 1)
                     )
                 ),
                 fluidRow(
-                    column(12, align = "center",
-                        actionButton("runBacktestButton", "UPDATE BACKTEST")
+                    column(12, align = "left", checkboxInput("sameVolCheckbox", "Set asset-specific vol targets", value = FALSE))
+                ),
+                fluidRow(
+                    column(
+                        12, 
+                        align = "center", 
+                        actionButton(
+                            "runBacktestButton", 
+                            "UPDATE BACKTEST", 
+                            style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"
+                        )
                     )
                 )
             ),
