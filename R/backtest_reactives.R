@@ -9,25 +9,78 @@ library(glue)
 observe({
   if(input$backtestPanel == "ewbhTab") {
     shinyjs::disable(id = "volLookbackSlider")
-    shinyjs::disable(id = "targetVolSlider")
+    shinyjs::disable(id = "targetVolSlider1")
+    shinyjs::disable(id = "targetVolSlider2")
+    shinyjs::disable(id = "targetVolSlider3")
     shinyjs::disable(id = "rebalFreqSlider")
     shinyjs::disable(id = "capFreqSlider")
     
   } else if (input$backtestPanel == "ewrebalTab") {
     shinyjs::disable(id = "volLookbackSlider")
-    shinyjs::disable(id = "targetVolSlider")
+    shinyjs::disable(id = "targetVolSlider1")
+    shinyjs::disable(id = "targetVolSlider2")
+    shinyjs::disable(id = "targetVolSlider3")
     shinyjs::enable(id = "rebalFreqSlider")
     shinyjs::enable(id = "capFreqSlider")
   } else {
     shinyjs::enable(id = "rebalFreqSlider")
     shinyjs::enable(id = "capFreqSlider")
     shinyjs::enable(id = "volLookbackSlider")
-    shinyjs::enable(id = "targetVolSlider")
+    shinyjs::enable(id = "targetVolSlider1")
+    shinyjs::enable(id = "targetVolSlider2")
+    shinyjs::enable(id = "targetVolSlider3")
   }
 })
 
+# Vol target sliders control logic ====
+
+# force vol target sliders to move together unless asset-specific vol checkbox is checked
+observeEvent(input$targetVolSlider1, {
+  if(!input$sameVolCheckbox) {
+    updateSliderInput(inputId = "targetVolSlider2", value = input$targetVolSlider1)
+    updateSliderInput(inputId = "targetVolSlider3", value = input$targetVolSlider1)
+  }
+})
+
+observeEvent(input$targetVolSlider2, {
+  if(!input$sameVolCheckbox) {
+    updateSliderInput(inputId = "targetVolSlider1", value = input$targetVolSlider2)
+    updateSliderInput(inputId = "targetVolSlider3", value = input$targetVolSlider2)
+  }
+})
+
+observeEvent(input$targetVolSlider3, {
+  if(!input$sameVolCheckbox) {
+    updateSliderInput(inputId = "targetVolSlider1", value = input$targetVolSlider3)
+    updateSliderInput(inputId = "targetVolSlider2", value = input$targetVolSlider3)
+  }
+})
+
+observeEvent(input$sameVolCheckbox, {
+  # when checkbox is unchecked, set sliders 2 and 3 to value of 1
+  if(!input$sameVolCheckbox) {
+    updateSliderInput(inputId = "targetVolSlider2", value = input$targetVolSlider1)
+    updateSliderInput(inputId = "targetVolSlider3", value = input$targetVolSlider1)
+  }
+})
+
+vol_targets <- reactive({
+  if(input$sameVolCheckbox) {
+    vt <- c(
+      input$targetVolSlider1/100.,
+      input$targetVolSlider2/100.,
+      input$targetVolSlider3/100.
+    )
+    
+    setNames(vt, rp_tickers)
+  } else {
+    input$targetVolSlider1/100.
+  }
+})
+
+# Initialise objects for backtest calcs, update backtest on button click ====
+
 # put all bt calcs on observe event, select what to run basis tab selected
-# Update on button click
 init_eq <- reactiveValues(data = NULL)
 ew_norebal <- reactiveValues(data = NULL)
 ew_rebal <- reactiveValues(data = NULL) 
@@ -56,7 +109,7 @@ observeEvent(input$runBacktestButton, {
     
   } else {
     # rp calcs
-    theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, input$targetVolSlider/100.) %>% 
+    theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, vol_targets()) %>% 
       cap_leverage()
     
     # Get the snapshots at the month end boundaries
@@ -181,6 +234,8 @@ output$ewrebTradesTable <- renderDataTable({
 
 
 # RP backtest reactives =================
+
+# Backtst outputs ====
 
 output$rpTheoSizePlot <- renderPlot({
   if(is.null(volsize_prices$data))
