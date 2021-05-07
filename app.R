@@ -3,6 +3,7 @@ library(tidyverse)
 library(here)
 library(shinyjs)
 library(shinyWidgets)
+library(shinyKnobs)
 library(shinycssloaders)
 # library(here)
 # library(tidyverse)
@@ -84,13 +85,19 @@ ui <- navbarPage(
         value = "backtestTab",
         sidebarLayout(
             sidebarPanel(
-                sliderInput("initEqSlider", "Initial Equity, $", min = 1000, max = 1000000, step = 1000, value = 10000),
                 fluidRow(
-                    column(6, 
-                        knobInput("commKnob", "Per Share Commission, cents", min = 0.1, max = 2, step = 0.01, value = 0.5, displayPrevious = TRUE)
+                    column(6, sliderInput("initEqSlider", "Initial Equity, $", min = 1000, max = 100000, step = 1000, value = 20000)),
+                    column(6, sliderInput("maxLeverageSlider", "Maximum Leverage", min = 0, max = 5, step = 0.25, value = 1))
+                ),
+                fluidRow(
+                    column(4, 
+                           sliderInput("commKnob", "Comm. c/share", min = 0.1, max = 2, step = 0.01, value = 0.5)
                     ),
-                    column(6, 
-                        knobInput("minCommKnob", "Minimum Commission Per Order, $", min = 0, max = 10, step = 0.5, value = 0.5, displayPrevious = TRUE)
+                    column(4, 
+                           sliderInput("minCommKnob", "Min Comm. $/order", min = 0, max = 10, step = 0.5, value = 0.5)
+                    ),
+                    column(4,
+                        sliderInput("marginInterestSlider", "Interest, %pa", min = 0, max = 10, step = 0.5, value = 0.25)
                     )
                 ),
                 fluidRow(
@@ -141,6 +148,7 @@ ui <- navbarPage(
                                 plotOutput("ewbhTradesPlot", height = "150px"),
                                 plotOutput("ewbhCommPlot", height = "150px"),
                                 plotOutput("ewbhCommExpPlot", height = "150px"),
+                                plotOutput("ewbhInterestPlot", height = "150px"),
                                 DT::dataTableOutput(("ewbhTradesTable"))
                             )
                         )
@@ -161,6 +169,7 @@ ui <- navbarPage(
                                plotOutput("ewrebTradesPlot", height = "150px"),
                                plotOutput("ewrebCommPlot", height = "150px"),
                                plotOutput("ewrebCommExpPlot", height = "150px"),
+                               plotOutput("ewrebInterestPlot", height = "150px"),
                                DT::dataTableOutput(("ewrebTradesTable"))
                             )
                         )
@@ -182,6 +191,7 @@ ui <- navbarPage(
                                plotOutput("rpTradesPlot", height = "150px"),
                                plotOutput("rpCommPlot", height = "150px"),
                                plotOutput("rpCommExpPlot", height = "150px"),
+                               plotOutput("rprebInterestPlot", height = "150px"),
                                DT::dataTableOutput(("rpTradesTable"))
                             )
                         )

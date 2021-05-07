@@ -25,6 +25,10 @@ names(app_cols) <- c(rp_tickers, "Cash", "Portfolio")
 app_col_scale <- scale_colour_manual(name = "ticker", values = app_cols)
 app_fill_scale <- scale_fill_manual(name = "ticker", values = app_cols)
 
+# knob dimensions
+knob_height <- '100px'
+knob_width <- '100px'
+
 # calculate total returns
 prices <- prices %>% 
   filter(ticker %in% rp_tickers) %>% 

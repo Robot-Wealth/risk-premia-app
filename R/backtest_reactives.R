@@ -95,7 +95,7 @@ observeEvent(input$runBacktestButton, {
   
   if(input$backtestPanel == "ewbhTab") {
     # ew no rebal calculations
-    shares <- num_shares(monthlyprices, input$initEqSlider)
+    shares <- num_shares(monthlyprices, input$initEqSlider*input$maxLeverageSlider)
     pos <- monthlyprices %>% 
       ew_norebal_positions(shares, input$commKnob/100., as.double(input$minCommKnob))
     
@@ -103,23 +103,23 @@ observeEvent(input$runBacktestButton, {
       get_init_cash_bal(input$initEqSlider)
     
     ew_norebal$data <- pos %>% 
-      bind_cash_positions(initcashbal, input$initEqSlider)
+      bind_cash_positions(initcashbal, input$initEqSlider, input$marginInterestSlider)
     
   } else if (input$backtestPanel == "ewrebalTab") {
     # ew rebal calcs
-    ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob))
+    ew_rebal$data <- share_based_backtest(monthlyprices, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider,  input$commKnob/100., as.double(input$minCommKnob), margin_interest_rate = input$marginInterestSlider, rebal_method = "ew", leverage = input$maxLeverageSlider)
     
   } else {
     # rp calcs
     theosize_constrained <- calc_vol_target(prices, input$volLookbackSlider, vol_targets()) %>% 
-      cap_leverage()
+      cap_leverage(max_leverage = input$maxLeverageSlider)
     
     # Get the snapshots at the month end boundaries
     volsize_prices$data <- monthlyprices %>%
       inner_join(select(theosize_constrained, ticker, date, theosize_constrained), by = c('ticker','date'))
     
     # backtest
-    rp_rebal$data <- share_based_backtest(volsize_prices$data, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), rebal_method = "rp")
+    rp_rebal$data <- share_based_backtest(volsize_prices$data, input$initEqSlider, input$capFreqSlider, input$rebalFreqSlider, input$commKnob/100., as.double(input$minCommKnob), margin_interest_rate = input$marginInterestSlider, rebal_method = "rp", leverage = input$maxLeverageSlider)
   }
 })
 
@@ -129,8 +129,18 @@ output$ewbhEqPlot <- renderPlot({
   req(input$runBacktestButton)
   if(is.null(ew_norebal$data))
     return()
+  
+  # get portfolio NAV ("net exposure") and add to dataframe
+  port_nav <- ew_norebal$data %>% 
+    select(date, exposure, ticker) %>%
+    group_by(date) %>%
+    summarise(exposure = sum(exposure)) %>%
+    mutate(ticker = "NAV")
+  
   ew_norebal$data %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing') 
+    select(date, exposure, ticker) %>%
+    bind_rows(port_nav) %>%
+    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing')
 })
 
 output$ewbhRollPerfPlot <- renderPlot({
@@ -163,6 +173,13 @@ output$ewbhCommExpPlot <- renderPlot({
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure') 
 })
 
+output$ewbhInterestPlot <- renderPlot({
+  if(is.null(ew_norebal$data))
+    return()
+  ew_norebal$data %>% 
+    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
+})
+
 output$ewbhPerfTable <- renderTable({
   if(is.null(ew_norebal$data))
     return()
@@ -183,7 +200,17 @@ output$ewbhTradesTable <- renderDataTable({
 output$ewrebEqPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
+  
+  # get portfolio NAV ("net exposure") and add to dataframe
+  port_nav <- ew_rebal$data %>% 
+    select(date, exposure, ticker) %>% 
+    group_by(date) %>% 
+    summarise(exposure = sum(exposure)) %>% 
+    mutate(ticker = "NAV")
+  
   ew_rebal$data %>% 
+    select(date, ticker, exposure) %>% 
+    bind_rows(port_nav) %>% 
     stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, Rebalancing')
 })
 
@@ -215,6 +242,13 @@ output$ewrebCommExpPlot <- renderPlot({
     return()
   ew_rebal$data %>% 
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
+})
+
+output$ewrebInterestPlot <- renderPlot({
+  if(is.null(ew_rebal$data))
+    return()
+  ew_rebal$data %>% 
+    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
 })
 
 # TODO: figure out why performance output is repeated in shiny output
@@ -249,8 +283,19 @@ output$rpTheoSizePlot <- renderPlot({
 output$rpEqPlot <- renderPlot({
   if(is.null(rp_rebal$data))
     return()
+  
+  # get portfolio NAV ("net exposure") and add to dataframe
+  port_nav <- rp_rebal$data %>% 
+    select(date, exposure, ticker) %>% 
+    group_by(date) %>% 
+    summarise(exposure = sum(exposure)) %>% 
+    mutate(ticker = "NAV")
+  
   rp_rebal$data %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Simple Risk Parity')
+    select(date, exposure, ticker) %>% 
+    bind_rows(port_nav) %>% 
+    arrange(date) %>% 
+    stacked_area_chart(title = '3 ETF USD Risk Premia - Simple Risk Parity')
 })
 
 output$rpRollPerfPlot <- renderPlot({
@@ -281,6 +326,13 @@ output$rpCommExpPlot <- renderPlot({
     return()
   rp_rebal$data %>% 
     comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
+})
+
+output$rprebInterestPlot <- renderPlot({
+  if(is.null(rp_rebal$data))
+    return()
+  rp_rebal$data %>% 
+    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
 })
 
 # TODO: figure out why performance output is repeated in shiny output
