@@ -102,8 +102,11 @@ observeEvent(input$runBacktestButton, {
     initcashbal <- pos %>%
       get_init_cash_bal(input$initEqSlider)
     
-    ew_norebal$data <- pos %>% 
+    pos <- pos %>% 
       bind_cash_positions(initcashbal, input$initEqSlider, input$marginInterestSlider)
+    
+    ew_norebal$data <- pos %>% 
+      adust_bh_backtest_for_margin_calls(monthlyprices, input$initEqSlider, input$commKnob/100., as.double(input$minCommKnob), input$marginInterestSlider)
     
   } else if (input$backtestPanel == "ewrebalTab") {
     # ew rebal calcs
