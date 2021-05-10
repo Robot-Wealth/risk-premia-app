@@ -13,6 +13,8 @@ library(roll)
 # prevent automatic sourcing of R directory
 shinyOptions(shiny.autoload.r = FALSE)
 
+source(here::here("R", "global.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
+
 # update price data on startup of new process - if app is not running locally
 if(Sys.getenv("SHINY_PORT") != "") {
     print("Updating data")
@@ -20,7 +22,6 @@ if(Sys.getenv("SHINY_PORT") != "") {
     update_price_data()
 }
 
-source(here::here("R", "global.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
 
 # UI ====================================
@@ -97,7 +98,7 @@ ui <- navbarPage(
                            sliderInput("minCommKnob", "Min Comm. $/order", min = 0, max = 10, step = 0.5, value = 0.5)
                     ),
                     column(4,
-                        sliderInput("marginInterestSlider", "Interest, %pa", min = 0, max = 10, step = 0.5, value = 0.25)
+                        sliderInput("marginInterestSlider", "Int., T-bill spread, %pa", min = 0, max = 5, step = 0.5, value = 2)
                     )
                 ),
                 fluidRow(
@@ -149,6 +150,7 @@ ui <- navbarPage(
                                 plotOutput("ewbhCommPlot", height = "150px"),
                                 plotOutput("ewbhCommExpPlot", height = "150px"),
                                 plotOutput("ewbhInterestPlot", height = "150px"),
+                                plotOutput("ewbhInterestRatePlot", height = "150px"),
                                 DT::dataTableOutput(("ewbhTradesTable"))
                             )
                         )
@@ -170,6 +172,7 @@ ui <- navbarPage(
                                plotOutput("ewrebCommPlot", height = "150px"),
                                plotOutput("ewrebCommExpPlot", height = "150px"),
                                plotOutput("ewrebInterestPlot", height = "150px"),
+                               plotOutput("ewrebInterestRatePlot", height = "150px"),
                                DT::dataTableOutput(("ewrebTradesTable"))
                             )
                         )
@@ -192,6 +195,7 @@ ui <- navbarPage(
                                plotOutput("rpCommPlot", height = "150px"),
                                plotOutput("rpCommExpPlot", height = "150px"),
                                plotOutput("rprebInterestPlot", height = "150px"),
+                               plotOutput("rprebInterestRatePlot", height = "150px"),
                                DT::dataTableOutput(("rpTradesTable"))
                             )
                         )

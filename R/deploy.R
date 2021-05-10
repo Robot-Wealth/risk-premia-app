@@ -7,7 +7,7 @@ rsconnect::setAccountInfo(
 )
 
 rsconnect::deployApp(
-  appName = "risk-premia-app-asset-level-vol",
+  appName = "risk-premia-app",
   appDir = "C:/Users/Kris/Documents/risk-premia-app", 
   account = "robotwealth"
 )

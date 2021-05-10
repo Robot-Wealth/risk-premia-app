@@ -143,7 +143,7 @@ output$ewbhEqPlot <- renderPlot({
   ew_norebal$data %>% 
     select(date, exposure, ticker) %>%
     bind_rows(port_nav) %>%
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, No Rebalancing')
+    stacked_area_chart('Equal Weight, No Rebalancing')
 })
 
 output$ewbhRollPerfPlot <- renderPlot({
@@ -159,28 +159,35 @@ output$ewbhTradesPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades') 
+    trades_chart('Trades') 
 })
 
 output$ewbhCommPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    comm_chart('3 ETF USD Risk Premia -  Commission ($)') 
+    comm_chart('Commission ($)') 
 })
 
 output$ewbhCommExpPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure') 
+    comm_pct_exp_chart('Commission as pct of exposure') 
 })
 
 output$ewbhInterestPlot <- renderPlot({
   if(is.null(ew_norebal$data))
     return()
   ew_norebal$data %>% 
-    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
+    interest_chart('Interest ($)') 
+})
+
+output$ewbhInterestRatePlot <- renderPlot({
+  if(is.null(ew_norebal$data))
+    return()
+  monthly_yields %>% 
+    interest_rate_chart(input$marginInterestSlider, 'Margin Interest Rate Spread') 
 })
 
 output$ewbhPerfTable <- renderTable({
@@ -214,7 +221,7 @@ output$ewrebEqPlot <- renderPlot({
   ew_rebal$data %>% 
     select(date, ticker, exposure) %>% 
     bind_rows(port_nav) %>% 
-    stacked_area_chart('3 ETF USD Risk Premia - Equal Weight, Rebalancing')
+    stacked_area_chart('Equal Weight, Rebalancing')
 })
 
 output$ewrebRollPerfPlot <- renderPlot({
@@ -230,28 +237,35 @@ output$ewrebTradesPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
   ew_rebal$data %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
+    trades_chart('Trades')
 })
 
 output$ewrebCommPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
   ew_rebal$data %>% 
-    comm_chart('3 ETF USD Risk Premia -  Commission ($)')
+    comm_chart('Commission ($)')
 })
 
 output$ewrebCommExpPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
   ew_rebal$data %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
+    comm_pct_exp_chart('Commission as pct of exposure')
 })
 
 output$ewrebInterestPlot <- renderPlot({
   if(is.null(ew_rebal$data))
     return()
   ew_rebal$data %>% 
-    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
+    interest_chart('Interest ($)') 
+})
+
+output$ewrebInterestRatePlot <- renderPlot({
+  if(is.null(ew_rebal$data))
+    return()
+  monthly_yields %>% 
+    interest_rate_chart(input$marginInterestSlider, 'Margin Interest Rate Spread') 
 })
 
 # TODO: figure out why performance output is repeated in shiny output
@@ -274,13 +288,12 @@ output$ewrebTradesTable <- renderDataTable({
 
 # RP backtest reactives =================
 
-# Backtst outputs ====
 
 output$rpTheoSizePlot <- renderPlot({
   if(is.null(volsize_prices$data))
     return()
   volsize_prices$data %>% 
-    constrained_sizing_plot(title = '3 ETF USD Risk Premia - Theoretical Constrained Sizing (% of Portfolio Equity')
+    constrained_sizing_plot(title = 'Theoretical Constrained Sizing (% of Portfolio Equity')
 })
 
 output$rpEqPlot <- renderPlot({
@@ -298,7 +311,7 @@ output$rpEqPlot <- renderPlot({
     select(date, exposure, ticker) %>% 
     bind_rows(port_nav) %>% 
     arrange(date) %>% 
-    stacked_area_chart(title = '3 ETF USD Risk Premia - Simple Risk Parity')
+    stacked_area_chart(title = 'Risk Parity')
 })
 
 output$rpRollPerfPlot <- renderPlot({
@@ -314,28 +327,35 @@ output$rpTradesPlot <- renderPlot({
   if(is.null(rp_rebal$data))
     return()
   rp_rebal$data %>% 
-    trades_chart('3 ETF USD Risk Premia - Trades')
+    trades_chart('Trades')
 })
 
 output$rpCommPlot <- renderPlot({
   if(is.null(rp_rebal$data))
     return()
   rp_rebal$data %>% 
-    comm_chart('3 ETF USD Risk Premia - Commission ($)')
+    comm_chart('Commission ($)')
 })
 
 output$rpCommExpPlot <- renderPlot({
   if(is.null(rp_rebal$data))
     return()
   rp_rebal$data %>% 
-    comm_pct_exp_chart('3 ETF USD Risk Premia -  Commission as pct of exposure')
+    comm_pct_exp_chart('Commission as pct of exposure')
 })
 
 output$rprebInterestPlot <- renderPlot({
   if(is.null(rp_rebal$data))
     return()
   rp_rebal$data %>% 
-    interest_chart('3 ETF USD Risk Premia -  Interest ($)') 
+    interest_chart('Interest ($)') 
+})
+
+output$rprebInterestRatePlot <- renderPlot({
+  if(is.null(rp_rebal$data))
+    return()
+  monthly_yields %>% 
+    interest_rate_chart(input$marginInterestSlider, 'Margin Interest Rate Spread') 
 })
 
 # TODO: figure out why performance output is repeated in shiny output
