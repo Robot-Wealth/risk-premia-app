@@ -48,6 +48,8 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
   # authorise big query
   bq_auth(path = "rw-algotrader-d96fb339cc47.json")
   
+  ticker_list <- glue_collapse(tickers, sep = '\',\'')
+  
   # download anything we don't have
   if(any(str_starts(tickers, "%"))) {
     tb <- bq_project_query(
@@ -55,16 +57,16 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
       query = glue(
       "SELECT *  
       FROM `{table}` 
-      WHERE symbol in ('{tickers}') AND date > '{last_price_date}';"
+      WHERE symbol in ('{ticker_list}') AND date > '{last_price_date}';"
         )
     )
   } else {
     tb <- bq_project_query(
       'rw-algotrader',
       query = glue(
-        "SELECT *  
-      FROM `{table}` 
-      WHERE ticker in ('{glue_collapse(tickers, sep = ',')}') AND date > '{last_price_date}';"
+        "SELECT *
+      FROM `{table}`
+      WHERE ticker in ('{ticker_list}') AND date > '{last_price_date}';"
       )
     )
     #   bq_project_query(
@@ -77,7 +79,6 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
     # )
   }
     
-  
   if(as.numeric(bq_table_meta(tb)$numRows) > 0) {
     latest_prices <- bq_table_download(tb)
     return(latest_prices)
@@ -120,31 +121,49 @@ get_last_price_date <- function(prices) {
     pull()
 }
 
-update_price_data <- function(prices, tickers = c('VTI','GLD','TLT')) {
+update_price_data <- function() {
+  now_ny <- get_current_ny_datetime()
   
-  if(all(tickers %in% rp_tickers)) {
-    load(here::here("data", "assetclass_prices.RData"))
+  # do us etf prices
+  load(here::here("data", "us_etf_prices.RData"))
+  
+  last_price_date <- get_last_price_date(us_etf_prices)
+  previous_bd <- get_previous_bd(now_ny)
+  
+  if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
+    # example: 12:01am Tuesday we start trying to download Monday's prices
+    latest_us_etf_prices <- bq_fetch_rp_prices(last_price_date, tickers = c('VTI','GLD','TLT'))
+  } 
+  
+  if(!is.null(latest_us_etf_prices)) {
+    us_etf_prices <- us_etf_prices %>% 
+      bind_rows(latest_us_etf_prices) %>% 
+      distinct(ticker, date, .keep_all = TRUE) %>% 
+      arrange(date)
     
-    now_ny <- get_current_ny_datetime()
-    last_price_date <- get_last_price_date(prices)
-    previous_bd <- get_previous_bd(now_ny)
+    save(us_etf_prices, file = here::here("data", "us_etf_prices.RData")) 
+  }
     
-    if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
-      # example: 12:01am Tuesday we start trying to download Monday's prices
-      latest_prices <- bq_fetch_rp_prices(last_price_date, tickers = tickers)
-    } 
+  # do leveraged us etf prices
+  load(here::here("data", "us_lev_etf_prices.RData"))
+  
+  last_price_date <- get_last_price_date(us_lev_etf_prices)
+  previous_bd <- get_previous_bd(now_ny)
+  
+  if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
+    # example: 12:01am Tuesday we start trying to download Monday's prices
+    latest_us_lev_etf_prices <- bq_fetch_rp_prices(last_price_date, tickers = c('SPXL', 'SSO', 'TYD', 'UPRO', 'TMF', 'UGL'), table = 'rw-algotrader.tlaq.extended_adjusted_etfs')
+  } 
+  
+  # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
+  # requires reloading of the historical data
+  if(!is.null(latest_us_lev_etf_prices)) {
+    us_lev_etf_prices <- us_lev_etf_prices %>% 
+      bind_rows(latest_us_lev_etf_prices) %>% 
+      distinct(ticker, date, .keep_all = TRUE) %>% 
+      arrange(date)
     
-    # latest_prices could contain dates that overlap with prices for certain tickers - see get_last_price_date()
-    # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
-    # requires reloading of the historical data
-    if(!is.null(latest_prices)) {
-      prices <- prices %>% 
-        bind_rows(latest_prices) %>% 
-        distinct(ticker, date, .keep_all = TRUE) %>% 
-        arrange(date)
-      
-      save(prices, file = here::here("data", "assetclass_prices.RData"))   
-    }
+    save(us_lev_etf_prices, file = here::here("data", "us_lev_etf_prices.RData")) 
   }
 }
 
@@ -180,14 +199,22 @@ update_price_data <- function(prices, tickers = c('VTI','GLD','TLT')) {
 # is_ny_business_day("2020-07-11")  # This is a Saturday. No tz --> assumption of UTC
 
 # tickers = c('VTI', 'GLD', 'TLT') 
-# table = 'rw-algotrader.master_assetclass.assetclass_price'
-# last_price_date = "2020-01-01"
+
+# tickers = c('SPXL', 'SSO', 'TYD', 'UPRO', 'TMF', 'UGL')
+# table = 'rw-algotrader.tlaq.extended_adjusted_etfs'
+# last_price_date = "1990-01-01"
+# ticker_list <- glue_collapse(tickers, sep = '\',\'')
 # 
-# bq_project_query(
+# 
+# tb <- bq_project_query(
 #   'rw-algotrader',
 #   query = glue(
-#     "SELECT *  
-#       FROM `{table}` 
-#       WHERE ticker in ('{glue_collapse(tickers, sep = ',')}') AND date > '{last_price_date}';"
+#     "SELECT *
+#       FROM `{table}`
+#       WHERE ticker in ('{ticker_list}');"
 #   )
 # )
+# 
+# prices <- bq_table_download(tb)
+# us_lev_etf_prices <- prices
+
