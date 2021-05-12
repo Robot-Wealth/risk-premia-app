@@ -92,7 +92,8 @@ ui <- navbarPage(
                             "Select Universe", 
                             choices = c(
                                 `US ETFs (VTI, TLT, GLD)` = "us_etfs",
-                                `Leveraged US ETFs (UPRO, TMF, UGL)` = "lev_us_etfs"
+                                `Leveraged US ETFs (UPRO, TMF, UGL)` = "lev_us_etfs",
+                                `UCITS ETFs (VDNR.UK, IDTL.UK, IGLN.UK)` = "ucits_etfs"
                             )
                         )
                     )

@@ -10,7 +10,8 @@ add_total_returns_col <- function(prices_df) {
     group_by(ticker) %>%
     mutate(
       totalreturns = ((closeadjusted) / dplyr::lag(closeadjusted)) - 1,
-      dividends = replace_na(dividends, 0)
+      dividends = replace_na(dividends, 0),
+      volume = replace_na(volume, 0)
     ) %>%
     na.omit() %>%
     mutate(cumreturns = cumprod(1+totalreturns))

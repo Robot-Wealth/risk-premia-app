@@ -218,3 +218,24 @@ update_price_data <- function() {
 # prices <- bq_table_download(tb)
 # us_lev_etf_prices <- prices
 
+# make ucits data - short-term solution from Stooq
+# downloaded CSV data with Zorro
+# specified column names - ticker, date, open, high, low, close, volume, closeadjusted (=close)
+# files <- list.files(path = here::here("data"), pattern = "*UK.csv", full.names = TRUE)
+# ucits_etf_prices <- map_dfr(files, read_csv) %>%
+#   distinct()
+# 
+# ucits_etf_prices <- ucits_etf_prices %>%
+#   mutate(date = as.Date(date, format = "%d/%m/%Y"))
+# 
+# # first_date <- ucits_etf_prices %>% group_by(ticker) %>% summarise(first_date = first(date)) %>% pull() %>% max()
+# # VNDR data is a bit shit prior to 2015-12-29
+# first_date <- '2015-12-29'
+# ucits_etf_prices <- ucits_etf_prices %>%
+#   filter(date >= first_date)
+# 
+# ucits_etf_prices %>%
+#   ggplot(aes(x = date, y = close, colour = ticker)) +
+#     geom_line()
+# 
+# save(ucits_etf_prices, file = here::here("data", "ucits_etf_prices.RData"))

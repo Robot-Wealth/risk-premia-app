@@ -15,6 +15,8 @@ observe({
     universe <- us_etf_tickers
   } else if(input$universeInput == "lev_us_etfs") {
     universe <- us_lev_etf_tickers
+  } else if(input$universeInput == "ucits_etfs") {
+    universe <- ucits_etf_tickers
   } else {
     stop("Implement another option for target vol sliders!!")
   }
@@ -29,6 +31,8 @@ backtest_tickers <- eventReactive(input$runBacktestButton, {
     us_etf_tickers
   } else if(input$universeInput == "lev_us_etfs") {
     us_lev_etf_tickers
+  } else if(input$universeInput == "ucits_etfs") {
+    ucits_etf_tickers
   }
 })
 

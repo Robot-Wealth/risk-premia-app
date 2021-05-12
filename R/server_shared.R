@@ -10,6 +10,7 @@ library(slider)
 # load data, functions
 load(here::here("data", "us_etf_prices.RData"))
 load(here::here("data", "us_lev_etf_prices.RData"))
+load(here::here("data", "ucits_etf_prices.RData"))
 load(here::here("data", "tbill_yields.RData"))
 source(here::here("R", "analysis_utils.R"), local = TRUE)
 source(here::here("R", "backtest_utils.R"), local = TRUE)
@@ -23,6 +24,7 @@ gg_color_hue <- function(n) {
 
 all_prices <- us_etf_prices %>% 
   bind_rows(us_lev_etf_prices) %>% 
+  bind_rows(ucits_etf_prices) %>% 
   arrange(date)
 
 # calculate total returns
