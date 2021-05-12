@@ -5,8 +5,6 @@ library(shinyjs)
 library(shinyWidgets)
 library(shinyKnobs)
 library(shinycssloaders)
-# library(here)
-# library(tidyverse)
 library(glue)
 library(roll)
 
@@ -19,7 +17,7 @@ source(here::here("R", "global.R"), local = FALSE)  # global scope: visible to s
 if(Sys.getenv("SHINY_PORT") != "") {
     print("Updating data")
     source(here::here("R", "update_data.R"), local = TRUE) # visible to server, all sessions
-    update_price_data()
+    update_price_data(tickers = rp_tickers)
 }
 
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions

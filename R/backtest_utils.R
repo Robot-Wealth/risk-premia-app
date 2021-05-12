@@ -347,7 +347,7 @@ interest_rate_chart <- function(rates, broker_spread, title) {
     ) +
     labs(
       x = "Date",
-      y = "Rate, %",
+      y = "Rate,%",
       title = title,
       subtitle = "Interest accrues on positive cash balances at lower rate, and is debited from negative balances at the higher rate."
     )
@@ -575,7 +575,7 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
       trades <- targetshares - sharepos
       tradevalue <- trades * currentprice
       commissions <- abs(trades) * per_share_Comm
-      commissions[commissions < min_comm] <- min_comm
+      commissions[commissions < min_comm & abs(trades) > 0] <- min_comm
       
       # Can we do proposed trades given NAV and MM? If not, adjust trade size, value, commissions etc
       post_trade_equity <- sum(targetshares*currentprice) + Cash - sum(tradevalue) - sum(commissions)

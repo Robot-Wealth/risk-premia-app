@@ -140,6 +140,10 @@ output$ewbhEqPlot <- renderPlot({
     summarise(exposure = sum(exposure)) %>%
     mutate(ticker = "NAV")
   
+  # TODO: get nav and maintenance margin as in bh_margin_call()
+  # then pass to stacked_area_chart to include main-margin line on plot
+  # print(port_nav)
+  
   ew_norebal$data %>% 
     select(date, exposure, ticker) %>%
     bind_rows(port_nav) %>%
