@@ -9,6 +9,7 @@ library(slider)
 
 # load data, functions
 load(here::here("data", "assetclass_prices.RData"))
+load(here::here("data", "tbill_yields.RData"))
 source(here::here("R", "analysis_utils.R"), local = TRUE)
 source(here::here("R", "backtest_utils.R"), local = TRUE)
 
@@ -38,7 +39,20 @@ monthlyprices <- make_monthly_prices(prices, monthends) %>%
   group_by(ticker) %>%
   mutate(returns = ((close) / dplyr::lag(close)) - 1)
 
+# set up monthly t-bill yields
+irx_monthends <- get_monthends(irx)
+monthly_yields <- make_monthly_prices(irx, irx_monthends, ticker_var = symbol, price_var = series) %>% 
+  arrange(date)
+
+# ensure prices and yields have common index
+ticker_temp <- monthlyprices %>% distinct(ticker) %>% first() %>% pull()
+monthly_yields <- monthly_yields %>% 
+  right_join(monthlyprices %>% filter(ticker == ticker_temp) %>%  select(date, ticker), by = "date") %>% 
+  tidyr::fill(symbol, .direction = "down") %>% 
+  tidyr::fill(close, .direction = "down")
+
 # backtest start and end dates
 startDate <- monthlyprices %>% summarise(min(date)) %>% pull()
 endDate <- monthlyprices %>% summarise(max(date)) %>% pull()
 initDate <- startDate - 1 # initDate is day before startdate
+

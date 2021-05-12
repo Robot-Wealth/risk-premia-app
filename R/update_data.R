@@ -43,20 +43,40 @@ is_after_ny_close <- function(x) {
 
 # update price data with latest from bq
 # won't deal with data gaps
-bq_fetch_rp_prices <- function(last_price_date) {
+bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT'), table = 'rw-algotrader.master_assetclass.assetclass_price') {
   
   # authorise big query
   bq_auth(path = "rw-algotrader-d96fb339cc47.json")
   
   # download anything we don't have
-  tb <- bq_project_query(
-    'rw-algotrader',
-    query = glue(
-    "SELECT *  
-    FROM `rw-algotrader.master_assetclass.assetclass_price` 
-    WHERE ticker in ('VTI','GLD','TLT') AND date > '{last_price_date}';"
+  if(any(str_starts(tickers, "%"))) {
+    tb <- bq_project_query(
+      'rw-algotrader',
+      query = glue(
+      "SELECT *  
+      FROM `{table}` 
+      WHERE symbol in ('{tickers}') AND date > '{last_price_date}';"
+        )
     )
-  )
+  } else {
+    tb <- bq_project_query(
+      'rw-algotrader',
+      query = glue(
+        "SELECT *  
+      FROM `{table}` 
+      WHERE ticker in ('{glue_collapse(tickers, sep = ',')}') AND date > '{last_price_date}';"
+      )
+    )
+    #   bq_project_query(
+    #   'rw-algotrader',
+    #   query = glue(
+    #   "SELECT *  
+    #   FROM `{table}` 
+    #   WHERE ticker in ('{tickers}') AND date > '{last_price_date}';"
+    #   )
+    # )
+  }
+    
   
   if(as.numeric(bq_table_meta(tb)$numRows) > 0) {
     latest_prices <- bq_table_download(tb)
@@ -100,32 +120,37 @@ get_last_price_date <- function(prices) {
     pull()
 }
 
-update_price_data <- function() {
+update_price_data <- function(prices, tickers = c('VTI','GLD','TLT')) {
   
-  load(here::here("data", "assetclass_prices.RData"))
-  
-  now_ny <- get_current_ny_datetime()
-  last_price_date <- get_last_price_date(prices)
-  previous_bd <- get_previous_bd(now_ny)
-  
-  if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
-    # example: 12:01am Tuesday we start trying to download Monday's prices
-    latest_prices <- bq_fetch_rp_prices(last_price_date)
-  } 
-  
-  # latest_prices could contain dates that overlap with prices for certain tickers - see get_last_price_date()
-  # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
-  # requires reloading of the historical data
-  if(!is.null(latest_prices)) {
-    prices <- prices %>% 
-      bind_rows(latest_prices) %>% 
-      distinct(ticker, date, .keep_all = TRUE) %>% 
-      arrange(date)
+  if(all(tickers %in% rp_tickers)) {
+    load(here::here("data", "assetclass_prices.RData"))
     
-    save(prices, file = here::here("data", "assetclass_prices.RData"))   
+    now_ny <- get_current_ny_datetime()
+    last_price_date <- get_last_price_date(prices)
+    previous_bd <- get_previous_bd(now_ny)
+    
+    if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
+      # example: 12:01am Tuesday we start trying to download Monday's prices
+      latest_prices <- bq_fetch_rp_prices(last_price_date, tickers = tickers)
+    } 
+    
+    # latest_prices could contain dates that overlap with prices for certain tickers - see get_last_price_date()
+    # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
+    # requires reloading of the historical data
+    if(!is.null(latest_prices)) {
+      prices <- prices %>% 
+        bind_rows(latest_prices) %>% 
+        distinct(ticker, date, .keep_all = TRUE) %>% 
+        arrange(date)
+      
+      save(prices, file = here::here("data", "assetclass_prices.RData"))   
+    }
   }
-  
 }
+
+# add IRX data
+# irx <- bq_fetch_rp_prices("1900-01-01", tickers = '%IRX', table = 'rw-algotrader.tlaq.economic')
+# save(irx, file = here::here("data", "tbill_yields.RData"))
 
 # update_price_data()
 
@@ -153,3 +178,16 @@ update_price_data <- function() {
 # date(last_bd) == "2020-07-10"
 # 
 # is_ny_business_day("2020-07-11")  # This is a Saturday. No tz --> assumption of UTC
+
+# tickers = c('VTI', 'GLD', 'TLT') 
+# table = 'rw-algotrader.master_assetclass.assetclass_price'
+# last_price_date = "2020-01-01"
+# 
+# bq_project_query(
+#   'rw-algotrader',
+#   query = glue(
+#     "SELECT *  
+#       FROM `{table}` 
+#       WHERE ticker in ('{glue_collapse(tickers, sep = ',')}') AND date > '{last_price_date}';"
+#   )
+# )

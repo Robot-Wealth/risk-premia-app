@@ -15,10 +15,10 @@ get_monthends <- function(prices_df) {
       summarise(date = max(date))
 }
 
-make_monthly_prices <- function(prices_df, monthends) {
+make_monthly_prices <- function(prices_df, monthends, ticker_var = ticker, price_var = closeadjusted) {
   prices_df %>%
     inner_join(monthends, by = 'date') %>%
-    select(ticker, date, close = closeadjusted)
+    select({{ticker_var}}, date, close = {{price_var}})
   
 }
 
@@ -37,7 +37,10 @@ ew_norebal_positions <- function(monthlyprices_df, num_shares, perShareComm, min
   
   monthlyprices_df %>%
     inner_join(num_shares, by = 'ticker') %>%
-    mutate(exposure = shares * close) %>%
+    mutate(
+      exposure = shares * close,
+      maintenance_margin = MAINT_MARGIN*exposure
+    ) %>%
     group_by(ticker) %>%
     mutate(trades = shares - lag(shares)) %>%
     # Initial trade to setup position comes through as NA
@@ -54,51 +57,213 @@ get_init_cash_bal <- function(positions, inital_equity) {
     pull()
 }
 
-bind_cash_positions <- function(positions, initial_cash_balance, inital_equity) {
+bind_cash_positions <- function(positions, initial_cash_balance, initial_equity, margin_interest_rate, start_date = startDate) {
+  # first_pass flag gives slightly different behaviour in leveraged case where we may adjust positions on margin call
+  
   # bind cash balances to positions df
+  print(initial_cash_balance)
   
   ticker_temp <- positions %>% distinct(ticker) %>% first() %>% pull()
-  
   Cash <- positions %>%
     ungroup() %>%
     filter(ticker == ticker_temp) %>% # just doing this to get the dates
+    left_join(monthly_yields %>% select(date, close) %>% rename("tbill_rate" = close))  %>% 
     mutate(
       ticker = 'Cash', 
       date, 
+      returns = 0,
       close = 0, 
       shares = 0, 
-      exposure = initial_cash_balance, 
+      exposure = initial_cash_balance,
+      tradevalue = case_when(date == start_date ~ initial_cash_balance - initial_equity, TRUE ~ 0),
       trades = 0, 
-      tradevalue = case_when(date == startDate ~ initial_cash_balance - inital_equity, TRUE ~ 0), 
-      commission = 0
-    ) 
+      commission = 0,
+      maintenance_margin = 0,
+      interest = 0
+    )
   
-  positions %>%
+  # loop over Cash df to calculate interest (changes depending on previous value and tbill rate)
+  for(i in c(1:nrow(Cash))) {
+    if(i == 1) {
+      Cash[i, 'exposure'] <- initial_cash_balance
+      Cash[i, 'interest'] <- 0
+    } else {
+      last_cash <- Cash[[(i-1), 'exposure']]
+      this_tbill_rate <- Cash[[i, 'tbill_rate']]
+      interest <- if_else(
+        last_cash < 0,
+        last_cash*(margin_interest_rate + this_tbill_rate)/100/12,
+        last_cash*max(0, this_tbill_rate - margin_interest_rate)/100/12
+      )
+      Cash[i, 'interest'] <- interest
+      Cash[i, 'exposure'] <- last_cash + interest
+    }
+  }
+  
+  Cash <- Cash %>% 
+    select(-tbill_rate)  %>% # keep variable if we want to print it in trade table output
+    mutate(interest = -1*interest)  # negative interest received, positive interest paid in table and plot outputs
+  
+  positions <- positions %>%
     # Bind cash balances and sort by date again
     bind_rows(Cash) %>%
-    arrange(date)
+    arrange(date) 
+  
+  positions
+}
+
+bh_margin_call <- function(positions) {
+  
+  # margin call
+  margin_calls <- positions %>%
+    mutate(is_cash = case_when(ticker == "Cash" ~ "Cash", TRUE ~ "Stocks")) %>% 
+    group_by(date, is_cash) %>%
+    summarise(
+      exposure = sum(exposure),
+    ) %>% 
+    pivot_wider(id_cols = date, names_from = is_cash, values_from = exposure) %>% 
+    mutate(
+      nav = Cash + Stocks,  # net value of cash and stock positions
+      maintenance_margin = MAINT_MARGIN*Stocks,
+      # if not enough margin, liquidate
+      margin_call = case_when(nav < maintenance_margin ~ TRUE, TRUE ~ FALSE),
+      reduce_by = case_when(
+        nav < maintenance_margin ~ min(max(0, 1 - (nav/MAINT_MARGIN)/Stocks), 1),
+        TRUE ~ 0
+      )
+    )
+
+    margin_calls
+}
+  
+adust_bh_backtest_for_margin_calls <- function(positions, monthlyprices_df, initial_equity, perShareComm, minCommPerOrder, margin_interest) {
+  # get margin calls
+  margin_calls <- bh_margin_call(positions)
+  
+  # adjust backtest for margin calls iteratively... since its B&H, reduced positions will carry forward
+  num_margin_calls <- sum(margin_calls$margin_call)
+  while(num_margin_calls > 0) {
+    print("margin calls")
+    print(margin_calls)
+    # pull out date of first margin call
+    first_margin_call <- margin_calls$date[which(margin_calls$margin_call)[1]]
+    
+    # keep pre-margin call positions
+    no_margin_call_positions <- positions %>% 
+      filter(date < first_margin_call)
+    
+      num_shares <- positions %>% 
+        filter(
+          date == first_margin_call,
+          ticker %in% rp_tickers
+        ) %>% 
+        left_join(margin_calls %>% filter(date == first_margin_call) %>%  select(date, reduce_by), by = "date") %>%
+        mutate(
+          trades = reduce_by*shares,
+          shares = shares - shares*reduce_by
+        ) 
+      print("num shares")
+      print(num_shares)
+    
+      # cash balance prior to margin call
+      if(first_margin_call == positions$date[1]) {
+        starting_cash = initial_equity
+        post_margin_call_cash <- initial_equity - sum(num_shares$shares*num_shares$close)
+        
+      } else {
+        starting_cash_date <- margin_calls$date[which(margin_calls$margin_call)[1] - 1]
+        starting_cash <- positions %>% 
+          filter(date == starting_cash_date, ticker == "Cash") %>% 
+          select(exposure) %>% 
+          pull()
+        
+        print("getting pre mc cahs")
+        print(positions %>% 
+                filter(date == starting_cash_date, ticker == "Cash"))
+        print(starting_cash)
+        
+        post_margin_call_cash <- starting_cash - sum(num_shares$trades*num_shares$close)
+        print("post mc cash")
+        print(post_margin_call_cash)
+      }
+      
+      if(post_margin_call_cash <= 0 & sum(num_shares$shares <= 0)) {
+        positions %>% 
+          filter(
+            date == first_margin_call,
+            ticker %in% rp_tickers
+          ) %>% 
+          mutate(
+            trades = -shares,
+            shares = 0
+          ) 
+        
+        new_positions <- ew_norebal_positions(
+          monthlyprices_df %>% filter(date >= first_margin_call), 
+          num_shares %>% select(ticker, shares), 
+          perShareComm, 
+          minCommPerOrder
+        ) %>% 
+          bind_cash_positions(0, 0, margin_interest, start_date = first_margin_call)
+        
+        print("new pos")
+        print(new_positions)
+        
+      } else {
+        new_positions <- ew_norebal_positions(
+          monthlyprices_df %>% filter(date >= first_margin_call), 
+          num_shares %>% select(ticker, shares), 
+          perShareComm, 
+          minCommPerOrder
+        ) %>% 
+          bind_cash_positions(post_margin_call_cash, starting_cash, margin_interest, start_date = first_margin_call)
+        
+        print("new pos")
+        print(new_positions)
+      }
+      
+      positions <- no_margin_call_positions %>% 
+        bind_rows(new_positions)
+      
+      print(positions)
+      
+      margin_calls <- bh_margin_call(positions)
+      num_margin_calls <- sum(margin_calls$margin_call)
+      print(glue("Num margin calls {num_margin_calls}"))
+    # }
+  }
+  
+  positions
+  
 }
 
 # Charts ================================
 
 stacked_area_chart <- function(positions, title) {
   positions %>% 
+    filter(ticker != "NAV") %>% 
     ggplot(aes(x = date, y = exposure, fill = ticker)) +
       geom_area() +
-      app_fill_scale +
+      # app_fill_scale +
+      scale_fill_manual(name = "ticker", values = app_cols, limits = c(rp_tickers, 'Cash')) +
+      geom_line(data = positions %>% filter(ticker == "NAV"), aes(x = date, y = exposure, colour = "ticker"), size = 1.5) +
+      scale_colour_manual(values = "black", labels = "NAV") +
       labs(
         x = "Date",
         y = "Expsoure Value",
-        title = title
+        title = title, 
+        colour = ""
       ) 
 }
 
 trades_chart <- function(positions, title) {
+  # specifying colour for bar plots will render a border, without which some bars don't plot due to long x-axis
   positions %>%
     filter(ticker != 'Cash') %>% 
-    ggplot(aes(x = date, y = tradevalue, fill = ticker)) +
-      geom_bar(stat = 'identity', position = position_dodge()) +
+    ggplot(aes(x = date, y = tradevalue, fill = ticker, colour = ticker)) +
+      geom_bar(stat = 'identity', position = position_stack(), lwd = 0.6) +
       app_fill_scale +
+      app_col_scale +
       labs(
         x = "Date",
         y = "Trade Value",
@@ -111,9 +276,10 @@ comm_chart <- function(positions, title) {
   
   positions %>%
     filter(ticker != 'Cash') %>% 
-    ggplot(aes(x=date, y=commission , fill = ticker)) +
-      geom_bar(stat = 'identity') +
+    ggplot(aes(x=date, y=commission , fill = ticker, colour = ticker)) +
+      geom_bar(stat = 'identity', lwd = 0.6, position = position_stack()) +
       app_fill_scale +
+      app_col_scale +
       labs(
         x = "Date",
         y = "Commission",
@@ -127,14 +293,64 @@ comm_pct_exp_chart <- function(positions, title) {
   positions %>%
     filter(ticker != 'Cash') %>% 
     mutate(commissionpct = commission / exposure) %>%
-    ggplot(aes(x = date, y = commissionpct , fill = ticker)) +
-      geom_bar(stat = 'identity', position = position_dodge()) +
+    ggplot(aes(x = date, y = commissionpct , fill = ticker, colour = ticker)) +
+      geom_bar(stat = 'identity', position = position_stack(), lwd = 0.6) +
       app_fill_scale +
+      app_col_scale +
       labs(
         x = "Date",
         y = "Commission",
         title = title
       )
+}
+
+interest_chart <- function(positions, title) {
+  # Interest cost as $
+  
+  positions %>%
+    filter(ticker == 'Cash') %>% 
+    ggplot(aes(x = date, y = interest, fill = ticker, colour = ticker)) +
+    geom_bar(stat = 'identity', lwd = 0.6) +
+    app_fill_scale +
+    app_col_scale +
+    labs(
+      x = "Date",
+      y = "Margin Interest Cost",
+      title = title,
+      subtitle = "Positive interest paid, negative interest received"
+    )
+}
+
+interest_rate_chart <- function(rates, broker_spread, title) {
+  # Interest rate: tbill yield and broker spread
+  
+  rates <- rates %>% 
+    mutate(
+      # close = fill(close, direction = "down"),
+      accrued_rate = pmax(0, close - broker_spread),
+      deducted_rate = close + broker_spread
+    ) %>% 
+    select(date, close, accrued_rate, deducted_rate) %>% 
+    rename("Tbill_yield" = close) %>% 
+    pivot_longer(cols = -date, names_to = "Rate Type", values_to = "rate")
+  
+  rates %>%
+    ggplot(aes(x = date, y = rate, colour = `Rate Type`, linetype = `Rate Type`)) +
+    geom_line() +
+    scale_colour_manual(
+      values = c(Tbill_yield = "black", accrued_rate = "blue", deducted_rate = "red"), 
+      labels = c(Tbill_yield = "13-week Tbill Yield", accrued_rate = "Accrued Rate", deducted_rate = "Deducted Rate")
+    ) +
+    scale_linetype_manual(
+      values = c(Tbill_yield = 1, accrued_rate = 2, deducted_rate = 2), 
+      labels = c(Tbill_yield = "13-week Tbill Yield", accrued_rate = "Accrued Rate", deducted_rate = "Deducted Rate")
+    ) +
+    labs(
+      x = "Date",
+      y = "Rate,%",
+      title = title,
+      subtitle = "Interest accrues on positive cash balances at lower rate, and is debited from negative balances at the higher rate."
+    )
 }
 
 # Performance metrics ===================
@@ -263,8 +479,11 @@ rolling_ann_port_perf_plot <- function(perf_df) {
 # - refactor
 # - replace for loop with map_df
 
-share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency, rebal_frequency, per_share_Comm, min_comm, rebal_method = "ew") {
-  
+share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency, rebal_frequency, per_share_Comm, min_comm, margin_interest_rate, rebal_method = "ew", leverage = 1) {
+  "Margin interest accrues on previous month's Cash balance @ margin_interest_rate/100/12*Cash. Credited to positive Cash, debited from negative Cash.
+  leverage parameter used to calculate positions in EW strategy (RP strategy calculates positions upstream). TODO: should make this consistent
+  leverage parameter used to flag whether to charge/accrue interest in both cases (don't want to accrue interest when leverage < 1)
+  "
   stopifnot(rebal_method %in% c("ew", "rp"))
   
   # Create wide data frames for simple share based backtest
@@ -291,33 +510,120 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
     if(rebal_method == "rp") {
       currenttheosize <- as.numeric(widetheosize[i, 2:4])
     }
+    
+    # charge/accrue interest on last month's balance
+    # get funding rate for currentdate
+    this_tbill_rate <- monthly_yields %>% 
+      filter(date == currentdate) %>% 
+      select(close) %>% 
+      pull()
+    
+    if(length(this_tbill_rate) == 0) {  # if we don't have current data, get the most recent
+      this_tbill_rate = monthly_yields %>% 
+        summarise(rate = last(close)) %>% 
+        pull()
+    }
+    
+    margin_interest <- if_else(
+      Cash < 0, 
+      Cash * (this_tbill_rate + margin_interest_rate)/100/12, 
+      Cash * (max(0, this_tbill_rate - margin_interest_rate)/100/12)
+    )
+    
+    # update cash and total equity balances
+    Cash <- Cash + margin_interest
     equity <- sum(sharepos * currentprice) + Cash
     
-    # Update capEquity if it's re-capitalisation rebalance time
-    if(cap_frequency > 0) {
-      if(i %% cap_frequency == 0) capEquity <- equity 
-    }
+    if(equity > 0) {
     
-    # Update position sizing if its position rebalance time 
-    if (i == 1 | i %% rebal_frequency == 0) {
-      if(rebal_method == "ew") {
-        targetshares <- trunc((capEquity / 3) / currentprice) 
-      } else {
-        targetshares <- trunc((capEquity * currenttheosize) / currentprice)  
+      # force reduce position if exceeds maintenance margin requirements
+      margin_call <- FALSE
+      liq_shares <- c(0, 0, 0)
+      liq_commissions <- c(0, 0, 0)
+      if(equity < MAINT_MARGIN*sum(sharepos * currentprice)) {
+        margin_call <- TRUE
+        
+        # how much stock to liquidate? NOTE: this doesn't include the commission costs or other fees of liquidating in figuring out post-liquidation NAV
+        liquidate_factor <- 1 - (equity/MAINT_MARGIN)/sum(sharepos * currentprice) # 1 - (max share value/current share value)
+        
+        # liquidate equal proportions of stock
+        liq_shares <- liquidate_factor * sharepos
+        liq_commissions <- liq_shares * per_share_Comm
+        liq_commissions[liq_commissions < min_comm] <- min_comm
+        
+        Cash <- Cash - sum(liq_shares*currentprice) - sum(liq_commissions) 
+        sharepos <- sharepos - liq_shares
+        sharevalue <- sharepos * currentprice
+        equity <- sum(sharevalue) + Cash
+        
       }
+      
+      # Update capEquity if it's re-capitalisation rebalance time
+      if(cap_frequency > 0) {
+        if(i %% cap_frequency == 0) capEquity <- equity 
+      }
+      
+      # Update position sizing if its position rebalance time 
+      if (i == 1 | i %% rebal_frequency == 0) {
+        if(rebal_method == "ew") {
+          targetshares <- trunc((leverage * capEquity / 3) / currentprice) 
+        } else {
+          targetshares <- trunc((capEquity * currenttheosize) / currentprice)  
+        }
+      }
+      
+      trades <- targetshares - sharepos
+      tradevalue <- trades * currentprice
+      commissions <- abs(trades) * per_share_Comm
+      commissions[commissions < min_comm & abs(trades) > 0] <- min_comm
+      
+      # Can we do proposed trades given NAV and MM? If not, adjust trade size, value, commissions etc
+      post_trade_equity <- sum(targetshares*currentprice) + Cash - sum(tradevalue) - sum(commissions)
+      if(post_trade_equity < MAINT_MARGIN*sum(targetshares * currentprice)) {
+        # adjust trade sizes
+        max_post_trade_shareval <- (equity - sum(commissions))/MAINT_MARGIN 
+        if(max_post_trade_shareval > 0) {  # this will only work when > 0
+          reduce_by <- 1 - max_post_trade_shareval/sum(targetshares*currentprice) 
+          targetshares <- targetshares - ceiling(reduce_by*targetshares)
+          trades <- targetshares - sharepos
+          tradevalue <- trades * currentprice
+          commissions <- abs(trades) * per_share_Comm
+          commissions[commissions < min_comm] <- min_comm
+        }
+      }
+      
+      # Adjust cash by value of trades 
+      Cash <- Cash - sum(tradevalue) - sum(commissions)
+      sharepos <- targetshares
+      sharevalue <- sharepos * currentprice
+      equity <- sum(sharevalue) + Cash
+      
+      if(equity <= 0) {  # rekt
+        sharepos <- c(0,0,0)
+        sharevalue <- c(0,0,0)
+        sharevalue <- c(0,0,0)
+        trades <- c(0, 0, 0)
+        liq_shares <- c(0, 0, 0)
+        commissions <- c(0, 0, 0)
+        liq_commissions <- c(0, 0, 0)
+        interst <- c(0, 0, 0)
+        equity <- 0
+        Cash <- 0
+      }
+      
+    } else {  # rekt
+      sharepos <- c(0,0,0)
+      sharevalue <- c(0,0,0)
+      tradevalue <- c(0,0,0)
+      trades <- c(0, 0, 0)
+      liq_shares <- c(0, 0, 0)
+      commissions <- c(0, 0, 0)
+      liq_commissions <- c(0, 0, 0)
+      interst <- c(0, 0, 0)
+      equity <- 0
+      Cash <- 0
     }
-    
-    trades <- targetshares - sharepos
-    tradevalue <- trades * currentprice
-    commissions <- abs(trades) * per_share_Comm
-    commissions[commissions < min_comm] <- min_comm
-    
-    # Adjust cash by value of trades
-    Cash <- Cash - sum(tradevalue) - sum(commissions)
-    sharepos <- targetshares
-    sharevalue <- sharepos * currentprice
-    equity <- sum(sharevalue) + Cash
-    
+      
     # Create data frame and add to list
     row_df <- data.frame(
        ticker = c('Cash', colnames(wideprices[2:4])),
@@ -325,9 +631,11 @@ share_based_backtest <- function(monthlyprices_df, initial_equity, cap_frequency
        close = c(0,currentprice),
        shares = c(0,sharepos),
        exposure = c(Cash, sharevalue),
-       sharetrades = c(0, trades),
+       sharetrades = c(0, trades + liq_shares),
        tradevalue = c(-sum(tradevalue), tradevalue),
-       commission = c(0, commissions)
+       commission = c(0, commissions + liq_commissions),
+       interest = c(-margin_interest, rep(0, 3)),  # interest debited appears positive like other costs
+       margin_call = margin_call  # was there a liquidation event this month?
     )
     
     rowlist[[i]] <- row_df
