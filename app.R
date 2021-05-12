@@ -14,11 +14,11 @@ shinyOptions(shiny.autoload.r = FALSE)
 source(here::here("R", "global.R"), local = FALSE)  # global scope: visible to server and ui, all sessions
 
 # update price data on startup of new process - if app is not running locally
-if(Sys.getenv("SHINY_PORT") != "") {
-    print("Updating data")
-    source(here::here("R", "update_data.R"), local = TRUE) # visible to server, all sessions
-    update_price_data(tickers = rp_tickers)
-}
+# if(Sys.getenv("SHINY_PORT") != "") {
+#     print("Updating data")
+#     source(here::here("R", "update_data.R"), local = TRUE) # visible to server, all sessions
+#     update_price_data()
+# }
 
 source(here::here("R", "server_shared.R"), local = TRUE)  # visible to server, all sessions
 
@@ -85,6 +85,19 @@ ui <- navbarPage(
         sidebarLayout(
             sidebarPanel(
                 fluidRow(
+                    column(
+                        9, 
+                        selectInput(
+                            "universeInput", 
+                            "Select Universe", 
+                            choices = c(
+                                `US ETFs (VTI, TLT, GLD)` = "us_etfs",
+                                `Leveraged US ETFs (UPRO, TMF, UGL)` = "lev_us_etfs"
+                            )
+                        )
+                    )
+                ),
+                fluidRow(
                     column(6, sliderInput("initEqSlider", "Initial Equity, $", min = 1000, max = 100000, step = 1000, value = 20000)),
                     column(6, sliderInput("maxLeverageSlider", "Maximum Leverage", min = 0, max = 5, step = 0.25, value = 1))
                 ),
@@ -102,9 +115,9 @@ ui <- navbarPage(
                 fluidRow(
                     column(
                         6, 
-                        sliderInput("targetVolSlider1", glue("{rp_tickers[1]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
-                        sliderInput("targetVolSlider2", glue("{rp_tickers[2]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
-                        sliderInput("targetVolSlider3", glue("{rp_tickers[3]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5)
+                        sliderInput("targetVolSlider1", glue("{us_etf_tickers[1]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
+                        sliderInput("targetVolSlider2", glue("{us_etf_tickers[2]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5),
+                        sliderInput("targetVolSlider3", glue("{us_etf_tickers[3]} Target Volatility, %"), min = 1, max = 10, step = 0.5, value = 5)
                     ),
                     column(6, 
                         sliderInput("volLookbackSlider", "Volatility Estimation Window, days", min = 5, max = 120, step = 5, value = 60),

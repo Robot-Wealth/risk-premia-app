@@ -3,7 +3,7 @@
 library(shiny)
 
 df <- reactive({
-  prices %>% 
+  all_prices %>% 
     filter(ticker %in% input$assets)
 })
 
