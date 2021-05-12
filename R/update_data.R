@@ -57,7 +57,7 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
       query = glue(
       "SELECT *  
       FROM `{table}` 
-      WHERE symbol in ('{ticker_list} AND date > '{last_price_date}';"
+      WHERE symbol in ('{ticker_list}') AND date > '{last_price_date}';"
         )
     )
   } else {
@@ -66,7 +66,7 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
       query = glue(
         "SELECT *
       FROM `{table}`
-      WHERE ticker in ('{ticker_list} AND date > '{last_price_date}');"
+      WHERE ticker in ('{ticker_list}') AND date > '{last_price_date}';"
       )
     )
     #   bq_project_query(
