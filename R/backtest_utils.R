@@ -516,9 +516,6 @@ share_based_backtest <- function(monthlyprices_df, unadjusted_prices, initial_eq
     # update cash and total equity balances
     Cash <- Cash + margin_interest
     equity <- sum(sharepos * currentprice) + Cash
-    print(sharepos)
-    print(currentprice)
-    print(equity)
     if(equity > 0) {
     
       # force reduce position if exceeds maintenance margin requirements
