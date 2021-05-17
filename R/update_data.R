@@ -5,12 +5,6 @@ library(timeDate)
 library(glue)
 library(here)
 
-"
-BQ pricing for queries:
-- first 5TB/month free
-- then $5/TB
-"
-
 # check last completed business day
 
 # x: tz-aware datetime object. If no tz specified, will assume UTC
@@ -69,14 +63,6 @@ bq_fetch_rp_prices <- function(last_price_date, tickers = c('VTI', 'GLD', 'TLT')
       WHERE ticker in ('{ticker_list}') AND date > '{last_price_date}';"
       )
     )
-    #   bq_project_query(
-    #   'rw-algotrader',
-    #   query = glue(
-    #   "SELECT *  
-    #   FROM `{table}` 
-    #   WHERE ticker in ('{tickers}') AND date > '{last_price_date}';"
-    #   )
-    # )
   }
     
   if(as.numeric(bq_table_meta(tb)$numRows) > 0) {
@@ -121,15 +107,26 @@ get_last_price_date <- function(prices) {
     pull()
 }
 
+get_last_yield_date <- function(yields) {
+  "This returns the date of the earliest last price of all the tickers"
+  yields %>% 
+    group_by(symbol) %>% 
+    summarise(last_update = max(date)) %>% 
+    summarise(earliest_last = min(last_update)) %>% 
+    pull()
+}
+
 update_price_data <- function() {
   now_ny <- get_current_ny_datetime()
   
   # do us etf prices
+  print("Updating US ETF Data")
   load(here::here("data", "us_etf_prices.RData"))
   
   last_price_date <- get_last_price_date(us_etf_prices)
   previous_bd <- get_previous_bd(now_ny)
   
+  latest_us_etf_prices <- NULL
   if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
     # example: 12:01am Tuesday we start trying to download Monday's prices
     latest_us_etf_prices <- bq_fetch_rp_prices(last_price_date, tickers = c('VTI','GLD','TLT'))
@@ -145,11 +142,13 @@ update_price_data <- function() {
   }
     
   # do leveraged us etf prices
+  print("Updating Leveraged US ETF Data")
   load(here::here("data", "us_lev_etf_prices.RData"))
   
   last_price_date <- get_last_price_date(us_lev_etf_prices)
   previous_bd <- get_previous_bd(now_ny)
   
+  latest_us_lev_etf_prices <- NULL
   if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
     # example: 12:01am Tuesday we start trying to download Monday's prices
     latest_us_lev_etf_prices <- bq_fetch_rp_prices(last_price_date, tickers = c('SPXL', 'SSO', 'TYD', 'UPRO', 'TMF', 'UGL'), table = 'rw-algotrader.tlaq.extended_adjusted_etfs')
@@ -164,6 +163,57 @@ update_price_data <- function() {
       arrange(date)
     
     save(us_lev_etf_prices, file = here::here("data", "us_lev_etf_prices.RData")) 
+  }
+  
+  # do UCITS etf prices (first date we have all three tickers is 2015-04-30)
+  print("Updating UCITS ETF Data")
+  load(here::here("data", "ucits_etf_prices.RData"))
+  
+  last_price_date <- get_last_price_date(ucits_etf_prices)
+  previous_bd <- get_previous_bd(now_ny)
+  
+  latest_ucits_etf_prices <- NULL
+  if((last_price_date < previous_bd) || (last_price_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
+    # example: 12:01am Tuesday we start trying to download Monday's prices
+      latest_ucits_etf_prices <- bq_fetch_rp_prices(last_price_date, tickers = c('IDTL', 'IGLN', 'VDNR'), table = 'rw-algotrader.xlon.ucits_rp_etfs')
+  } 
+  
+  # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
+  # requires reloading of the historical data
+  if(!is.null(latest_ucits_etf_prices)) {
+    # need a closeadjusted column - TODO: incorporate this properly into data pipeline (currently closeadj == close)
+    latest_ucits_etf_prices <- latest_ucits_etf_prices %>% 
+      mutate(closeadjusted = close)
+    
+    ucits_etf_prices <- ucits_etf_prices %>% 
+      bind_rows(latest_ucits_etf_prices) %>% 
+      distinct(ticker, date, .keep_all = TRUE) %>% 
+      arrange(date)
+    
+    save(ucits_etf_prices, file = here::here("data", "ucits_etf_prices.RData")) 
+  }
+  
+  # do t-bill yield
+  print("Updating T-Bill Yield Data")
+  load(here::here("data", "tbill_yields.RData"))
+  
+  last_yield_date <- get_last_yield_date(irx)
+  previous_bd <- get_previous_bd(now_ny)
+  
+  latest_tbill_yields <- NULL
+  if((last_yield_date < previous_bd) || (last_yield_date == previous_bd && wday(now_ny, week_start = 1) && is_after_ny_close(now_ny))) {
+    # example: 12:01am Tuesday we start trying to download Monday's prices
+    latest_tbill_yields <- bq_fetch_rp_prices(last_yield_date, tickers = c('%IRX'), table = 'rw-algotrader.tlaq.economic')
+  } 
+  
+  # requires reloading of the historical data
+  if(!is.null(latest_tbill_yields)) {
+    irx <- irx %>% 
+      bind_rows(latest_tbill_yields) %>% 
+      distinct(symbol, date, .keep_all = TRUE) %>% 
+      arrange(date)
+    
+    save(irx, file = here::here("data", "tbill_yields.RData")) 
   }
 }
 
