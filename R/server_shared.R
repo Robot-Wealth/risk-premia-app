@@ -34,7 +34,7 @@ all_prices <- all_prices %>%
 # set up monthly prices, returns
 month_ends <- get_monthends(all_prices)
 
-all_monthly_prices <- make_monthly_prices(all_prices, month_ends) %>% 
+all_monthly_prices <- make_monthly_prices(all_prices, month_ends, ticker_var = ticker) %>% 
   arrange(date) %>%
   group_by(ticker) %>%
   mutate(returns = ((close) / dplyr::lag(close)) - 1)
@@ -44,7 +44,7 @@ all_monthly_unadjusted <- make_monthly_prices(all_prices, month_ends, price_var 
   group_by(ticker)
 
 # set up monthly t-bill yields
-irx_monthends <- get_monthends(irx)
+irx_monthends <- get_monthends(irx, ticker_var = symbol)
 monthly_yields <- make_monthly_prices(irx, irx_monthends, ticker_var = symbol, price_var = series) %>% 
   arrange(date)
 

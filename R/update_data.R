@@ -181,10 +181,6 @@ update_price_data <- function() {
   # TODO: also we want this to fail and raise the alarm if there has been a split/corporate action that 
   # requires reloading of the historical data
   if(!is.null(latest_ucits_etf_prices)) {
-    # need a closeadjusted column - TODO: incorporate this properly into data pipeline (currently closeadj == close)
-    latest_ucits_etf_prices <- latest_ucits_etf_prices %>% 
-      mutate(closeadjusted = close)
-    
     ucits_etf_prices <- ucits_etf_prices %>% 
       bind_rows(latest_ucits_etf_prices) %>% 
       distinct(ticker, date, .keep_all = TRUE) %>% 

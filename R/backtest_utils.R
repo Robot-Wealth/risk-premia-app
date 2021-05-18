@@ -6,20 +6,27 @@ library(lubridate)
 
 # Setup backtest =======================
 
-get_monthends <- function(prices_df) {
+get_monthends <- function(prices_df, ticker_var = ticker) {
   prices_df %>% 
       mutate(
         year = year(date),
         month = month(date)
       ) %>%
-      group_by(year, month) %>%
+      group_by(year, month, {{ticker_var}}) %>%
       summarise(date = max(date))
 }
 
 make_monthly_prices <- function(prices_df, monthends, ticker_var = ticker, price_var = closeadjusted) {
+  if("symbol" %in% colnames(prices_df)) {
+    prices_df %>%
+      inner_join(monthends, by = c('date' = 'date', 'symbol' = 'symbol')) %>%
+      select({{ticker_var}}, date, close = {{price_var}})
+    
+  } else {
   prices_df %>%
-    inner_join(monthends, by = 'date') %>%
+    inner_join(monthends, by = c('date' = 'date', 'ticker' = 'ticker')) %>%
     select({{ticker_var}}, date, close = {{price_var}})
+  }
 }
 
 # Buy equal amount, don't rebalance =====

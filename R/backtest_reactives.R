@@ -377,7 +377,6 @@ output$ewrebTradesTable <- renderDataTable({
 
 # RP backtest reactives =================
 
-
 output$rpTheoSizePlot <- renderPlot({
   if(is.null(volsize_prices$data))
     return()
